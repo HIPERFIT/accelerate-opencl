@@ -1,0 +1,19 @@
+Name:                   accelerate-opencl
+Version:                0.1
+Cabal-version:          >= 1.6
+Tested-with:            GHC >= 6.12.3
+Build-type:             Simple
+Synopsis:               OpenCL backend for the Data.Array.Accelerate library
+Description:            Adds OpenCL support to accelerate
+Author:                 Martin Dybdal
+Maintainer:             Martin Dybdal <dybber@dybber.dk>
+Stability:              Experimental
+
+
+Data-files:             clbits/map.cl
+
+Library
+  Build-depends:        base                 == 4.*,
+                        accelerate           == 0.9.*
+
+  Exposed-modules:      Data.Array.Accelerate.OpenCL
