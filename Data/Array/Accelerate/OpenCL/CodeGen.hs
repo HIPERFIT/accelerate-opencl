@@ -1,20 +1,31 @@
 {-# LANGUAGE CPP, GADTs, PatternGuards, ScopedTypeVariables, TemplateHaskell, QuasiQuotes #-}
+-- |
+-- Module      : Data.Array.Accelerate.OpenCL.CodeGen
+-- Copyright   : [2011] Martin Dybdal
+-- License     : BSD3
+--
+-- Maintainer  : Martin Dybdal <dybber@dybber.dk>
+-- Stability   : experimental
+-- Portability : non-portable (GHC extensions)
+--
+
 module Data.Array.Accelerate.OpenCL.CodeGen (
 
   -- * types
   CUTranslSkel, AccBinding(..),
 
   -- * code generation
---  codeGenAcc, codeGenFun, codeGenExp
+  codeGenAcc, codeGenFun, codeGenExp
 
 ) where
 
 import Data.Char
+
 import qualified Language.C as C
+import qualified Data.Loc
+import qualified Data.Symbol
 import qualified Language.C.Syntax
 import Language.C.Quote.C
-import Data.Loc
-import Data.Symbol
 
 import Text.PrettyPrint
 
@@ -31,7 +42,7 @@ import qualified Foreign.Storable                               as F
 
 import Data.Array.Accelerate.OpenCL.CodeGen.Data
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
--- import Data.Array.Accelerate.CUDA.CodeGen.Skeleton
+import Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
 
 
 -- #include "accelerate.h"
@@ -64,11 +75,11 @@ instance Eq (AccBinding aenv) where
 codeGenAcc :: forall aenv a. OpenAcc aenv a -> [AccBinding aenv] -> CUTranslSkel
 codeGenAcc acc vars =
   let --fvars                      = concatMap (liftAcc acc) vars
-      CUTranslSkel code skel = codeGen acc
+      CUTranslSkel code = codeGen acc
 --      CTranslUnit decl node      = code
   in
    --CUTranslSkel (CTranslUnit (fvars ++ decl) node) def skel
-   CUTranslSkel code skel
+   CUTranslSkel code
   where
     codeGen :: OpenAcc aenv a -> CUTranslSkel
     codeGen (OpenAcc pacc) =
@@ -98,7 +109,7 @@ codeGenAcc acc vars =
         -- Scanr' f e _      -> mkScanr' (codeGenExpType e) (codeGenExp e) (codeGenFun f)
         -- Scanl1 f a        -> mkScanl1 (codeGenAccType a) (codeGenFun f)
         -- Scanr1 f a        -> mkScanr1 (codeGenAccType a) (codeGenFun f)
-        -- Map f a           -> mkMap (codeGenAccType acc) (codeGenAccType a) (codeGenFun f)
+        Map f a           -> mkMap (codeGenAccType acc) (codeGenAccType a) (head $ codeGenFun f) -- TODO shouldnt be head $ codeGenFun f
         -- ZipWith f a b     -> mkZipWith (codeGenAccTypeDim acc) (codeGenAccTypeDim a) (codeGenAccTypeDim b) (codeGenFun f)
         -- Permute f _ g a   -> mkPermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f) (codeGenFun g)
         -- Backpermute _ f a -> mkBackpermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f)
@@ -246,7 +257,7 @@ codeGenExp (IndexHead ix) = return . last $ codeGenExp ix
 codeGenExp (IndexTail ix) =          init $ codeGenExp ix
 
 codeGenExp (Var i) =
-  let var = cvar ('x' : show (idxToInt i))
+  let var = cvar ('x' : idxToString i)
   in
   case codeGenTupleType (Sugar.eltType (undefined::t)) of
        [_] -> [var]
@@ -264,6 +275,8 @@ codeGenExp (Size a)         = return $ ccall "size" (codeGenExp (Shape a))
 codeGenExp (Shape a)
   | OpenAcc (Avar var) <- a = return $ cvar ("sh" ++ show (idxToInt var))
   | otherwise               = error "codeGenExp: expected array variable"
+
+idxToString idx = [chr (ord 'A' + idxToInt idx)]
 
 -- codeGenExp (IndexScalar a e)
 --   | OpenAcc (Avar var) <- a =

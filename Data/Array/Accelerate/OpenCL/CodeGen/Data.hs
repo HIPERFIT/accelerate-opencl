@@ -1,16 +1,33 @@
+-- |
+-- Module      : Data.Array.Accelerate.OpenCL.CodeGen.Data
+-- Copyright   : [2011] Martin Dybdal
+-- License     : BSD3
+--
+-- Maintainer  : Martin Dybdal <dybber@dybber.dk>
+-- Stability   : experimental
+-- Portability : non-partable (GHC extensions)
+--
+-- Common data types for code generation
+--
+
 module Data.Array.Accelerate.OpenCL.CodeGen.Data
   (
-    CType, CMacro, CUTranslSkel(..)
+    --CType, CMacro, 
+    CUTranslSkel(..)
   )
   where
 
 import Language.C
 --import Text.PrettyPrint
 
-type CType        = [TypeSpec]
-type CMacro       = (Id, Maybe Exp)
+--type CType        = [TypeSpec]
+--type CMacro       = (Id, Maybe Exp)
 data CUTranslSkel = CUTranslSkel [Definition] --[CMacro]
-                                 FilePath
+--                                 FilePath
+
+
+instance Show CUTranslSkel where
+  show (CUTranslSkel code) = unlines $ map show code
 
 -- instance Pretty CUTranslSkel where
 --   pretty (CUTranslSkel code defs skel) =
