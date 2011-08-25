@@ -9,17 +9,25 @@ Author:                 Martin Dybdal
 Maintainer:             Martin Dybdal <dybber@dybber.dk>
 Stability:              Experimental
 
-
-Data-files:             clbits/map.cl
-
 Library
-  Build-depends:        base                 == 4.*,
-                        accelerate           == 0.9.*,
-                        pretty               == 1.0.*,
+  Build-depends:        base                 >= 4.3,
+                        accelerate           >= 0.9,
+                        pretty               >= 1.0,
                         language-c-quote     >= 0.3.0.0,
                         srcloc,
-                        symbol
+                        symbol,
+                        hopencl              >= 0.1.1,
+                        mtl                  >= 2.0,
+                        fclabels             >= 0.9 && < 1.0,
+                        bytestring,
+                        zlib
 
   Exposed-modules:      Data.Array.Accelerate.OpenCL
   Other-modules:        Data.Array.Accelerate.OpenCL.CodeGen
                       , Data.Array.Accelerate.OpenCL.CodeGen.Util
+                      , Data.Array.Accelerate.OpenCL.CodeGen.Data
+                      , Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
+                      , Data.Array.Accelerate.OpenCL.CodeGen.Tuple
+                      , Data.Array.Accelerate.OpenCL.Analysis.Hash
+                      , Data.Array.Accelerate.OpenCL.State
+
