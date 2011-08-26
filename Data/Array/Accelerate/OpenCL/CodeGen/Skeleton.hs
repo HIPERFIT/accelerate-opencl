@@ -14,7 +14,7 @@
 module Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
   (
 --    mkGenerate, mkFold, mkFold1, mkFoldSeg, mkFold1Seg,
-    mkMap --, mkZipWith,
+    mkMap, mkZipWith,
 --    mkStencil, mkStencil2,
 --    mkScanl, mkScanr, mkScanl', mkScanr', mkScanl1, mkScanr1,
 --    mkPermute, mkBackpermute, mkIndex, mkReplicate
@@ -138,19 +138,44 @@ mkMap tyOut tyIn_A apply = CUTranslSkel $ outputdefs ++ inputdefs ++ [apply'] ++
     apply' = mkApply 1 apply
 
 
--- mkZipWith :: ([CType], Int) -> ([CType], Int) -> ([CType], Int) -> [CExpr] -> CUTranslSkel
--- mkZipWith (tyOut,dimOut) (tyIn1,dimIn1) (tyIn0,dimIn0) apply = CUTranslSkel code [] skel
---   where
---     skel = "zipWith.inl"
---     code = CTranslUnit
---             ( mkTupleType Nothing  tyOut ++
---               mkTupleType (Just 1) tyIn1 ++
---               mkTupleType (Just 0) tyIn0 ++
---             [ mkApply 2 apply
---             , mkDim "DimOut" dimOut
---             , mkDim "DimIn1" dimIn1
---             , mkDim "DimIn0" dimIn0 ])
---             (mkNodeInfo (initPos skel) (Name 0))
+mkZipWith :: ([C.Type], Int)
+          -> ([C.Type], Int)
+          ->([C.Type], Int) -> C.Exp -> CUTranslSkel
+mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
+      CUTranslSkel $ outputdefs ++ inputdefsA ++ inputdefsB ++
+                     [sh_out_def, sh_inB_def, sh_inA_def, apply'] ++ skel
+  where
+    (outputdefs, out_params, Set callSet) = mkOutputTuple tyOut
+    (inputdefsA, in_paramsA, Get callGetA) = mkInputTuple "A" tyInA
+    (inputdefsB, in_paramsB, Get callGetB) = mkInputTuple "B" tyInB
+
+    (sh_out_type, sh_out_def) = mkShape "DimOut" dimOut
+    (sh_inB_type, sh_inB_def) = mkShape "DimInB" dimInB
+    (sh_inA_type, sh_inA_def) = mkShape "DimInA" dimInA
+
+    apply' :: Definition
+    apply' = mkApply 2 apply
+
+    skel :: [Definition]
+    skel = [cunit|
+              __kernel void zipWith (const $ty:sh_out_type shOut,
+                                     const $ty:sh_inB_type shInB,
+                                     const $ty:sh_inA_type shInA,
+                                     $params:(out_params ++ in_paramsB ++ in_paramsA)) {
+                const $ty:ixType shapeSize = $id:(size dimOut)(shOut);
+                const $ty:ixType gridSize  = get_global_size(0);
+
+                for ($ty:ixType ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+                  $ty:ixType iA = $id:(toIndex dimInB)(shInB, $id:(fromIndex dimInB)(shOut, ix));
+                  $ty:ixType iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
+
+                  $ty:(typename "TyInB") valB = $exp:(callGetB "iB") ;
+                  $ty:(typename "TyInA") valA = $exp:(callGetA "iA") ;
+                  $ty:outType new = apply(valB, valA) ;
+                  $exp:(callSet "ix" "new") ;
+                }
+              }
+           |]
 
 
 -- -- Stencil

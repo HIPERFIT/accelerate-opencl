@@ -110,7 +110,7 @@ codeGenAcc acc vars =
         -- Scanl1 f a        -> mkScanl1 (codeGenAccType a) (codeGenFun f)
         -- Scanr1 f a        -> mkScanr1 (codeGenAccType a) (codeGenFun f)
         Map f a           -> mkMap (codeGenAccType acc) (codeGenAccType a) (head $ codeGenFun f) -- TODO shouldnt be head $ codeGenFun f
-        -- ZipWith f a b     -> mkZipWith (codeGenAccTypeDim acc) (codeGenAccTypeDim a) (codeGenAccTypeDim b) (codeGenFun f)
+        ZipWith f a b     -> mkZipWith (codeGenAccTypeDim acc) (codeGenAccTypeDim a) (codeGenAccTypeDim b) $ head (codeGenFun f) -- TODO shouldnt be head $ codeGenFun f
         -- Permute f _ g a   -> mkPermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f) (codeGenFun g)
         -- Backpermute _ f a -> mkBackpermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f)
         -- Replicate sl _ a  ->

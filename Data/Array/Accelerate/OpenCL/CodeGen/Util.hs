@@ -100,27 +100,21 @@ mkTypedef volatile tyname typ | volatile = let typ' = mkVolatile typ
                                            in [cedecl|typedef $ty:typ' $id:tyname;|]
                               | otherwise = [cedecl|typedef $ty:typ $id:tyname;|]
 
--- mkTypedef :: String -> Bool -> Bool -> CType -> CExtDecl
--- mkTypedef var volatile ptr ty =
---   CDeclExt $ CDecl
---     (CStorageSpec (CTypedef noSrcLoc) : [TypeQual (CVolatQual noSrcLoc) | volatile] ++ map CTypeSpec ty)
---     [(Just (CDeclr (Just (internalIdent var)) [CPtrDeclr [] noSrcLoc | ptr] Nothing [] noSrcLoc), Nothing, Nothing)]
---     noSrcLoc
+mkShape :: String -> Int -> (Type, Definition)
+mkShape name dim = (typename name, typedef)
+ where
+   typedef | dim == 0  = [cedecl| typedef void* $id:name; |]
+           | dim == 1  = [cedecl| typedef $ty:ixType $id:name; |]
+           | otherwise = mkStruct name False (replicate dim ixType)
 
--- mkShape :: Int -> String -> CExtDecl
--- mkShape d n = mkGlobal [constant,dimension] n
---   where
---     constant  = TypeQual (CAttrQual (CAttr (internalIdent "constant") [] noSrcLoc))
---     dimension = CTypeSpec (CTypeDef (internalIdent ("DIM" ++ show d)) noSrcLoc)
+toIndex :: Int -> String
+toIndex dim = "toIndexDIM" ++ show dim
 
--- mkGlobal :: DeclSpec -> String -> Definition
--- mkGlobal (DeclSpec storage qual ty _) name = [cedecl|$spec:spec $id:name;|]
---   where spec = DeclSpec (Tstatic noSrcLoc : storage) qual ty noSrcLoc
+fromIndex :: Int -> String
+fromIndex dim = "fromIndexDIM" ++ show dim
 
--- mkInitList :: [Exp] -> CInit
--- mkInitList []  = CInitExpr (CConst (CIntConst (cInteger 0) noSrcLoc)) noSrcLoc
--- mkInitList [x] = CInitExpr x noSrcLoc
--- mkInitList xs  = CInitList (map (\e -> ([],CInitExpr e noSrcLoc)) xs) noSrcLoc
+size :: Int -> String
+size dim = "sizeDIM" ++ show dim
 
 mkStruct :: String -> Bool -> [Type] -> Definition
 mkStruct name volatile types =
@@ -136,21 +130,6 @@ mkStruct name volatile types =
 
        names  = reverse $ take (length types) ['a' : show v | v <- [0..]]
        fields = zipWith mkDecl types' names
-
--- -- typedef struct __attribute__((aligned(n * sizeof(ty)))) {
--- --     ty [x, y, z, w];
--- -- } var;
--- --
--- mkTyVector :: String -> Int -> CType -> CExtDecl
--- mkTyVector var n ty =
---   CDeclExt $ CDecl
---     [CStorageSpec (CTypedef noSrcLoc), CTypeSpec (CSUType (CStruct CStructTag Nothing (Just [CDecl (map CTypeSpec ty) fields noSrcLoc]) [CAttr (internalIdent "aligned") [CBinary CMulOp (CConst (CIntConst (cInteger (toInteger n)) noSrcLoc)) (CSizeofType (CDecl (map CTypeSpec ty) [] noSrcLoc) noSrcLoc) noSrcLoc] noSrcLoc] noSrcLoc) noSrcLoc)]
---     [(Just (CDeclr (Just (internalIdent var)) [] Nothing [] noSrcLoc), Nothing, Nothing)]
---     noSrcLoc
---   where
---     fields = take n . flip map "xyzw" $ \f ->
---       (Just (CDeclr (Just (internalIdent [f])) [] Nothing [] noSrcLoc), Nothing, Nothing)
-
 
 mkDeviceFun :: String -> Type -> [Param] -> Exp -> Definition
 mkDeviceFun name tyout args expr =

@@ -690,7 +690,6 @@ primMarshalable(Word64)
 primMarshalable(Float)
 primMarshalable(Double)
 primMarshalable((Ptr a))
--- primMarshalable((OpenCL.MemObject a))
 
 instance Marshalable (OpenCL.MemObject a) where
   marshal x = return [OpenCL.MObjArg x]
@@ -757,7 +756,6 @@ dispatch (mdl, fun, cfg) fvs aenv args = do
 launch :: Marshalable args => (Int,Int,Integer) -> OpenCL.Kernel -> args -> CIO ()
 launch (cta,grid,smem) fn a = do
   args <- marshal a
-  liftIO . putStrLn $ "Argumenter: " ++ show (length args)
   (dev, queue) <- head <$> getM cl_devices
   liftIO $ do
     maxWorkGroupSize <- OpenCL.deviceMaxWorkGroupSize dev
