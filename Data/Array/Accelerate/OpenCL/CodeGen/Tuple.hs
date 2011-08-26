@@ -82,7 +82,7 @@ mkGet prj n tynames params =
         | n > 1     = zipWith assign [0..] tynames
         | otherwise = [ [cstm|val = $id:param_name [idx];|] ]
   in [cedecl|
-       static inline $ty:returnType $id:name(const $ty:ixType idx, $params:params) {
+       inline $ty:returnType $id:name(const $ty:ixType idx, $params:params) {
          $ty:returnType val;
          $stms:assignments
          return val;
@@ -97,7 +97,7 @@ mkSet n tynames params =
         | n > 1     = zipWith assign [0..] tynames
         | otherwise = [ [cstm|out[idx] = val;|] ]
   in [cedecl|
-       static inline void set(const $ty:ixType idx, const $ty:outType val, $params:params) {
+       inline void set(const $ty:ixType idx, const $ty:outType val, $params:params) {
          $stms:assignments
        }
      |]

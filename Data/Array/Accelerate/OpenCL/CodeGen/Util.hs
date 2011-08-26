@@ -154,7 +154,7 @@ mkStruct name volatile types =
 
 mkDeviceFun :: String -> Type -> [Param] -> Exp -> Definition
 mkDeviceFun name tyout args expr =
-  [cedecl| static inline $ty:tyout $id:name($params:args)
+  [cedecl| inline $ty:tyout $id:name($params:args)
            {
              $ty:tyout r = { $exp:expr };
              return r;
@@ -163,7 +163,7 @@ mkDeviceFun name tyout args expr =
 
 mkDeviceFun' :: String -> Type -> [Param] -> [Stm] -> Definition
 mkDeviceFun' name tyout args body =
-  [cedecl| static inline $ty:tyout $id:name($params:args)
+  [cedecl| inline $ty:tyout $id:name($params:args)
            {
              $stms:body
            }

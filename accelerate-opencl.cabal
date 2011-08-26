@@ -30,6 +30,7 @@ Library
                       , Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
                       , Data.Array.Accelerate.OpenCL.CodeGen.Tuple
                       , Data.Array.Accelerate.OpenCL.Analysis.Hash
+                      , Data.Array.Accelerate.OpenCL.Array.Data
                       , Data.Array.Accelerate.OpenCL.State
                       , Data.Array.Accelerate.OpenCL.Compile
                       , Data.Array.Accelerate.OpenCL.Execute

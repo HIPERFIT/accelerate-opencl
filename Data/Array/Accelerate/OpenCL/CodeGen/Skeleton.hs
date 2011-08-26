@@ -127,9 +127,9 @@ mkMap tyOut tyIn_A apply = CUTranslSkel $ outputdefs ++ inputdefs ++ [apply'] ++
                 const int gridSize = get_global_size(0);
 
                 for(idx = get_global_id(0); idx < shape; idx += gridSize) {
-                  $ty:(typename "TyIn") in = $exp:(callGet "idx") ;
-                  $ty:outType out = apply(in) ;
-                  $exp:(callSet "idx" "out") ;
+                  $ty:(typename "TyInA") val = $exp:(callGet "idx") ;
+                  $ty:outType new = apply(val) ;
+                  $exp:(callSet "idx" "new") ;
                 }
               }
            |]

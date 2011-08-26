@@ -27,7 +27,9 @@ data CUTranslSkel = CUTranslSkel [Definition] --[CMacro]
 
 
 instance Show CUTranslSkel where
-  show (CUTranslSkel code) = unlines $ map show code
+  show (CUTranslSkel code) = header ++ (unlines $ map show code)
+
+header = "#define Ix int\n\n"
 
 -- instance Pretty CUTranslSkel where
 --   pretty (CUTranslSkel code defs skel) =

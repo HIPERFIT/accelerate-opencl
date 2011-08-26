@@ -336,7 +336,7 @@ mapOp :: Elt e
       -> CIO (Array dim e)
 mapOp c kernel bindings acc aenv (Array sh0 in0) = do
   res@(Array _ out) <- newArray c (toElt sh0)
-  execute kernel bindings acc aenv (size sh0) ((((),out),in0),size sh0)
+  execute kernel bindings acc aenv (size sh0) ((((),size sh0), out),in0)
   freeArray in0
   return res
 
@@ -757,6 +757,7 @@ dispatch (mdl, fun, cfg) fvs aenv args = do
 launch :: Marshalable args => (Int,Int,Integer) -> OpenCL.Kernel -> args -> CIO ()
 launch (cta,grid,smem) fn a = do
   args <- marshal a
+  liftIO . putStrLn $ "Argumenter: " ++ show (length args)
   (dev, queue) <- head <$> getM cl_devices
   liftIO $ do
     maxWorkGroupSize <- OpenCL.deviceMaxWorkGroupSize dev

@@ -607,6 +607,7 @@ compile table key acc fvar = do
   -- cufile  <- outputName acc (dir </> "dragon.cu")        -- rawr!
   -- flags   <- compileFlags cufile
   let src = show $ codeGenAcc acc fvar
+  liftIO $ putStrLn src
   ctx <- getM cl_context
   prog <- liftIO $ OpenCL.createProgram ctx src
   devices <- getM cl_devices
