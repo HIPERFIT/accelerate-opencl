@@ -20,7 +20,8 @@ Library
                         mtl                  >= 2.0,
                         fclabels             >= 0.9 && < 1.0,
                         bytestring,
-                        zlib
+                        zlib,
+                        transformers         == 0.2.*
 
   Exposed-modules:      Data.Array.Accelerate.OpenCL
   Other-modules:        Data.Array.Accelerate.OpenCL.CodeGen
@@ -30,4 +31,6 @@ Library
                       , Data.Array.Accelerate.OpenCL.CodeGen.Tuple
                       , Data.Array.Accelerate.OpenCL.Analysis.Hash
                       , Data.Array.Accelerate.OpenCL.State
+                      , Data.Array.Accelerate.OpenCL.Compile
+                      , Data.Array.Accelerate.OpenCL.Execute
 

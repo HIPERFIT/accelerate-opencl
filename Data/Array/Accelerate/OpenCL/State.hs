@@ -16,8 +16,8 @@
 
 module Data.Array.Accelerate.OpenCL.State (
 
-  evalOpenCL, runOpenCL, runOpenCLWith, CLIO,
-  OpenCLState, unique, cl_platform , _cl_devices , _cl_context,
+  evalOpenCL, runOpenCL, runOpenCLWith, CIO,
+  OpenCLState, unique, cl_platform , cl_devices , cl_context,
   memoryTable, kernelTable,
 
   KernelTable, KernelEntry(KernelEntry), kernelName, kernelStatus,
@@ -71,7 +71,7 @@ type KernelTable = Hash.HashTable AccKey KernelEntry
 data KernelEntry = KernelEntry
   {
     _kernelName   :: FilePath,
-    _kernelStatus :: Either ProcessID Program
+    _kernelStatus :: Program --Either ProcessID Program
   }
 
 -- Associations between host- and device-side arrays, with reference counting.
@@ -117,7 +117,7 @@ refcount = lens get set
 -- TLM: the memory table is not persistent between computations. Move elsewhere?
 --
 --
-type CLIO = StateT OpenCLState IO
+type CIO = StateT OpenCLState IO
 
 data OpenCLState = OpenCLState
     { _unique      :: Int
@@ -195,17 +195,17 @@ $(mkLabels [''OpenCLState, ''KernelEntry])
 
 -- | Evaluate a OpenCL array computation under the standard global environment
 --
-evalOpenCL :: CLIO a -> IO a
+evalOpenCL :: CIO a -> IO a
 evalOpenCL = liftM fst . runOpenCL
 
-runOpenCL :: CLIO a -> IO (a, OpenCLState)
+runOpenCL :: CIO a -> IO (a, OpenCLState)
 runOpenCL acc = readIORef onta >>= flip runOpenCLWith acc
 
 
 -- | Execute a computation under the provided state, returning the updated
 -- environment structure and replacing the global state.
 --
-runOpenCLWith :: OpenCLState -> CLIO a -> IO (a, OpenCLState)
+runOpenCLWith :: OpenCLState -> CIO a -> IO (a, OpenCLState)
 runOpenCLWith state acc = do
   (a,s) <- runStateT acc state
 --  saveIndexFile s
