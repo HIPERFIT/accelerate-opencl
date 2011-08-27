@@ -12,7 +12,7 @@
 --
 
 module Data.Array.Accelerate.OpenCL (
-  Arrays, run, stream, test
+  Arrays, run
 ) where
 
 import System.IO.Unsafe
@@ -20,11 +20,11 @@ import System.IO.Unsafe
 
 -- standard library
 import Prelude hiding (catch)
-import Data.Record.Label
-import Control.Exception
+--import Data.Record.Label
+--import Control.Exception
 import Control.Applicative
-import System.IO.Unsafe
-import qualified Data.HashTable                   as Hash
+--import System.IO.Unsafe
+--import qualified Data.HashTable                   as Hash
 
 
 -- friends
@@ -47,12 +47,6 @@ run a = unsafePerformIO execute
   where
     acc     = convertAcc a
     execute = evalOpenCL (compileAcc acc >>= executeAcc >>= collect)
-
-stream = undefined
-
-
-test a = codeGenAcc (convertAcc a) []
-
 
 -- Copy from device to host, and decrement the usage counter. This last step
 -- should result in all transient arrays having been removed from the device.

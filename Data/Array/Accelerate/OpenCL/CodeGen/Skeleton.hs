@@ -30,7 +30,7 @@ import Data.Symbol
 
 
 --import System.FilePath
-import Data.Array.Accelerate.Type
+--import Data.Array.Accelerate.Type
 import Data.Array.Accelerate.OpenCL.CodeGen.Data
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
 import Data.Array.Accelerate.OpenCL.CodeGen.Tuple

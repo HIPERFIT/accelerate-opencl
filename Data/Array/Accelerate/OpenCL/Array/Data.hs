@@ -30,7 +30,7 @@ import Prelude hiding (id, (.))
 import Control.Category
 
 import Foreign.Ptr
-import Foreign.Storable                                 (Storable, sizeOf)
+import Foreign.Storable                                 (Storable)
 import qualified Foreign                                as F
 
 import Data.Int

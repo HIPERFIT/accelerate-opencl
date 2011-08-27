@@ -41,8 +41,8 @@ import Data.Record.Label
 import Control.Applicative
 import Control.Monad
 import Control.Monad.State.Strict                       (StateT(..))
-import System.Posix.Types                               (ProcessID)
-import System.Mem.Weak
+--import System.Posix.Types                               (ProcessID)
+--import System.Mem.Weak
 import System.IO.Unsafe
 import Foreign.Ptr
 --import qualified Foreign.CUDA.Driver                    as CUDA

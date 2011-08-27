@@ -25,7 +25,6 @@ import qualified Language.C.Syntax
 import qualified Data.Loc
 import qualified Data.Symbol
 
-import Data.Array.Accelerate.OpenCL.CodeGen.Data
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
 
 data Accessor = Get (String -> Exp)
@@ -64,7 +63,6 @@ mkParameterList subscript n tynames = (params $ zip types' param_names, accessor
       | otherwise = [param_prefix] -- inA or out
     types' = map (mkPtr . mkGlobal . typename) tynames
 
-    accessorName = maybe "set" ("get" ++) subscript
     args = map (\p -> [cexp|$id:p|]) param_names
     accessorCall =
       case subscript of

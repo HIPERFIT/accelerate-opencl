@@ -29,7 +29,9 @@ data CUTranslSkel = CUTranslSkel [Definition] --[CMacro]
 instance Show CUTranslSkel where
   show (CUTranslSkel code) = header ++ (unlines $ map show code)
 
-header = "#define Ix int\n\n"
+header :: String
+header = "#include <accelerate_opencl_shape.h>\n\n"
+
 
 -- instance Pretty CUTranslSkel where
 --   pretty (CUTranslSkel code defs skel) =

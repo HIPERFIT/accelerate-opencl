@@ -38,26 +38,26 @@ import Data.Array.Accelerate.OpenCL.Analysis.Hash
 
 -- libraries
 import Prelude                                          hiding (exp)
-import Control.Applicative                              hiding (Const)
+--import Control.Applicative                              hiding (Const)
 import Control.Monad.Trans
 import Control.Monad
 import Control.Concurrent.MVar
 import Data.Maybe
 import Data.Record.Label
 --import Language.C
---import System.FilePath
---import System.Directory
-import System.IO
+import System.FilePath
+import System.Directory
+--import System.IO
 --import System.Exit                                      (ExitCode(..))
 --import System.Posix.Types                               (ProcessID)
 --import System.Posix.Process
 --import Text.PrettyPrint
-import Foreign.Storable
+--import Foreign.Storable
 import qualified Data.HashTable                         as Hash
 --import qualified Foreign.CUDA.Driver                    as CUDA
 import qualified Foreign.OpenCL.Bindings                as OpenCL
 
---import Paths_accelerate                                 (getDataDir)
+import Paths_accelerate_opencl                          (getDataDir)
 
 
 -- A binary object that will be used to execute a kernel
@@ -611,7 +611,7 @@ compile table key acc fvar = do
   ctx <- getM cl_context
   prog <- liftIO $ OpenCL.createProgram ctx src
   devices <- getM cl_devices
-  liftIO $ OpenCL.buildProgram prog (map fst devices) compileFlags
+  liftIO $ OpenCL.buildProgram prog (map fst devices) =<< compileFlags
   liftIO $ Hash.insert table key (KernelEntry "kernelName field NOT USED CURRENTLY" prog)
 
   -- pid     <- liftIO $ do
@@ -631,12 +631,20 @@ compile table key acc fvar = do
 --     Just (Exited ExitSuccess) -> return ()
 --     _                         -> error  $ "nvcc (" ++ show pid ++ ") terminated abnormally"
 
+compileFlags :: IO String
+compileFlags = do
+  ddir <- liftIO getDataDir
+  return $  "-I" ++ (ddir </> "clbits")
+            ++ " -I/home/dybber/lib/ati-stream-sdk-v2.3-lnx64/include/"
+            ++ "-Werror"
+            ++ "-cl-std=CL1.1"
 
-compileFlags :: String
-compileFlags =
-     " -I/home/dybber/lib/ati-stream-sdk-v2.3-lnx64/include/" -- TODO is this necessary?!
-  ++ "-Werror"
-  ++ "-cl-std=CL1.1"
+
+-- compileFlags :: String
+-- compileFlags =
+--      " -I/home/dybber/lib/ati-stream-sdk-v2.3-lnx64/include/" -- TODO is this necessary?!
+--   ++ "-Werror"
+--   ++ "-cl-std=CL1.1"
 
 
 -- -- Determine the appropriate command line flags to pass to the compiler process.

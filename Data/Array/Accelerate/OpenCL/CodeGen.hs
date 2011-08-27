@@ -36,7 +36,7 @@ import Data.Array.Accelerate.Pretty ()
 import Data.Array.Accelerate.Analysis.Type
 import Data.Array.Accelerate.Analysis.Shape
 --import Data.Array.Accelerate.Analysis.Stencil
-import Data.Array.Accelerate.Array.Representation
+--import Data.Array.Accelerate.Array.Representation
 import qualified Data.Array.Accelerate.Array.Sugar              as Sugar
 import qualified Foreign.Storable                               as F
 
@@ -267,7 +267,7 @@ codeGenExp (Var i) =
 
 codeGenExp (Cond p t e) =
   let [predicate] = codeGenExp p
-      branch a b  = [cexp| $exp:predicate ? a : b |]
+      branch a b  = [cexp| $exp:predicate ? $exp:a : $exp:b |]
   in
   zipWith branch (codeGenExp t) (codeGenExp e)
 
@@ -276,6 +276,7 @@ codeGenExp (Shape a)
   | OpenAcc (Avar var) <- a = return $ cvar ("sh" ++ show (idxToInt var))
   | otherwise               = error "codeGenExp: expected array variable"
 
+idxToString :: forall env t. Idx env t -> String
 idxToString idx = [chr (ord 'A' + idxToInt idx)]
 
 -- codeGenExp (IndexScalar a e)

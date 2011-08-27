@@ -76,8 +76,8 @@ fromBool True  = [cexp|1|]
 fromBool False = [cexp|0|]
 
 mkDim :: String -> Int -> Definition
-mkDim name n = [cedecl|typedef $ty:size $id:name;|]
-   where size = typename $ "DIM" ++ show n
+mkDim name n = [cedecl|typedef $ty:dim $id:name;|]
+   where dim = typename $ "DIM" ++ show n
 
 mkVolatile :: Type -> Type
 mkVolatile (Type (DeclSpec storage quals typ l0) _ l1) =
