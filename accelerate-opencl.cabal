@@ -8,14 +8,36 @@ Description:            Adds OpenCL support to accelerate
 Author:                 Martin Dybdal
 Maintainer:             Martin Dybdal <dybber@dybber.dk>
 Stability:              Experimental
+Category:               Compilers/Interpreters, Concurrency, Data
 
-Data-files:           clbits/accelerate_opencl_shape.h
+Data-files:             clbits/accelerate_opencl_shape.h
+
+Extra-source-files:     include/accelerate.h
+
+
+Flag pcache
+  Description:          Enable the persistent caching of the compiled OpenCL modules
+  Default:              False
+
+Flag bounds-checks
+  Description:          Enable bounds checking
+  Default:              True
+
+Flag unsafe-checks
+  Description:          Enable bounds checking in unsafe operations
+  Default:              False
+
+Flag internal-checks
+  Description:          Enable internal consistency checks
+  Default:              False
+
 
 Library
   Build-depends:        base                 >= 4.3
                       , accelerate           >= 0.9
                       , pretty               >= 1.0
                       , language-c-quote     >= 0.3.0.0
+                      , mainland-pretty
                       , srcloc
                       , symbol
                       , hopencl              >= 0.1.1
@@ -26,25 +48,44 @@ Library
                       , transformers         == 0.2.*
                       , directory
                       , filepath
+                      , ghc-binary
 
   Exposed-modules:      Data.Array.Accelerate.OpenCL
 
   Other-modules:        Data.Array.Accelerate.OpenCL.CodeGen
-                      , Data.Array.Accelerate.OpenCL.CodeGen.Util
-                      , Data.Array.Accelerate.OpenCL.CodeGen.Data
-                      , Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
-                      , Data.Array.Accelerate.OpenCL.CodeGen.Tuple
-                      , Data.Array.Accelerate.OpenCL.Analysis.Hash
-                      , Data.Array.Accelerate.OpenCL.Array.Data
-                      , Data.Array.Accelerate.OpenCL.State
-                      , Data.Array.Accelerate.OpenCL.Compile
-                      , Data.Array.Accelerate.OpenCL.Execute
-                      , Paths_accelerate_opencl
+                        Data.Array.Accelerate.OpenCL.CodeGen.Util
+                        Data.Array.Accelerate.OpenCL.CodeGen.Data
+                        Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
+                        Data.Array.Accelerate.OpenCL.CodeGen.Tuple
+                        Data.Array.Accelerate.OpenCL.Analysis.Hash
+                        Data.Array.Accelerate.OpenCL.Analysis.Device
+                        Data.Array.Accelerate.OpenCL.Array.Data
+                        Data.Array.Accelerate.OpenCL.State
+                        Data.Array.Accelerate.OpenCL.Compile
+                        Data.Array.Accelerate.OpenCL.Execute
+                        Data.Array.Accelerate.OpenCL.Internal.Check
+                        Paths_accelerate_opencl
 
   Ghc-options:          -O2 -Wall -fno-warn-name-shadowing -fno-warn-type-defaults
+  Include-Dirs:         include
 
   Extensions:           FlexibleContexts, QuasiQuotes, PatternGuards,
                         ScopedTypeVariables, GADTs, TypeFamilies,
                         ExistentialQuantification, BangPatterns, CPP,
                         TupleSections, TypeSynonymInstances,
                         TemplateHaskell, RankNTypes, TypeOperators
+
+
+
+
+  if flag(pcache)
+    CPP-options:        -DACCELERATE_OPENCL_PERSISTENT_CACHE
+
+  if flag(bounds-checks)
+    cpp-options:        -DACCELERATE_BOUNDS_CHECKS
+
+  if flag(unsafe-checks)
+    cpp-options:        -DACCELERATE_UNSAFE_CHECKS
+
+  if flag(internal-checks)
+    cpp-options:        -DACCELERATE_INTERNAL_CHECKS

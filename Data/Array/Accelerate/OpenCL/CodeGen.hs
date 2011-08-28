@@ -45,7 +45,7 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Util
 import Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
 
 
--- #include "accelerate.h"
+#include "accelerate.h"
 
 
 -- Array computations that were embedded within scalar expressions, and will be
@@ -181,7 +181,7 @@ codeGenAcc acc vars =
           doc | length ppr <= 250 = text ppr
               | otherwise         = text (take 250 ppr) <+> text "... {truncated}"
       in
-      error $ "codeGenAcc: " ++ msg
+      INTERNAL_ERROR(error) "codeGenAcc" msg
 
 
 -- -- code generation for stencil boundary conditions
@@ -236,7 +236,7 @@ codeGenExp p@(Prj idx e)
   $ codeGenExp e
 
 codeGenExp IndexNil         = []
-codeGenExp IndexAny         = error "codeGenExp: IndexAny: not implemented yet"
+codeGenExp IndexAny         = INTERNAL_ERROR(error) "codeGenExp" "IndexAny: not implemented yet"
 codeGenExp (IndexCons ix i) = codeGenExp ix ++ codeGenExp i
 
 codeGenExp (IndexHead sh@(Shape a)) =
@@ -274,7 +274,7 @@ codeGenExp (Cond p t e) =
 codeGenExp (Size a)         = return $ ccall "size" (codeGenExp (Shape a))
 codeGenExp (Shape a)
   | OpenAcc (Avar var) <- a = return $ cvar ("sh" ++ show (idxToInt var))
-  | otherwise               = error "codeGenExp: expected array variable"
+  | otherwise               = INTERNAL_ERROR(error) "codeGenExp" "expected array variable"
 
 idxToString :: forall env t. Idx env t -> String
 idxToString idx = [chr (ord 'A' + idxToInt idx)]
@@ -310,7 +310,8 @@ codeGenTup (t `SnocTup` e) = codeGenTup t ++ codeGenExp e
 prjToInt :: TupleIdx t e -> TupleType a -> Int
 prjToInt ZeroTupIdx     _                 = 0
 prjToInt (SuccTupIdx i) (b `PairTuple` a) = length (codeGenTupleType a) + prjToInt i b
-prjToInt _ _ = error "prjToInt: inconsistent valuation"
+prjToInt _ _ =
+  INTERNAL_ERROR(error) "prjToInt" "inconsistent valuation"
 
 
 -- Types
@@ -380,8 +381,8 @@ codeGenFloatingType (TypeCFloat  _) = [cty|float|]
 codeGenFloatingType (TypeCDouble _) = [cty|double|]
 
 codeGenNonNumType :: NonNumType a -> C.Type
-codeGenNonNumType (TypeBool   _) = error "codeGenNonNum :: Bool"
-codeGenNonNumType (TypeChar   _) = error "codeGenNonNum :: Char"
+codeGenNonNumType (TypeBool   _) = error "codeGenNonNum :: Bool" -- [CUnsigType internalNode, CCharType internalNode]
+codeGenNonNumType (TypeChar   _) = error "codeGenNonNum :: Char" -- [CCharType internalNode]
 codeGenNonNumType (TypeCChar  _) = [cty|char|]
 codeGenNonNumType (TypeCSChar _) = [cty|signed char|]
 codeGenNonNumType (TypeCUChar _) = [cty|unsigned char|]
@@ -451,7 +452,8 @@ codeGenPrim PrimBoolToInt            [a]   = codeGenBoolToInt a
 codeGenPrim (PrimFromIntegral ta tb) [a]   = codeGenFromIntegral ta tb a
 
 -- If the argument lists are not the correct length
-codeGenPrim _ _ = error "codeGenPrim: inconsistent valuation"
+codeGenPrim _ _ =
+  INTERNAL_ERROR(error) "codeGenPrim" "inconsistent valuation"
 
 
 -- Implementation of scalar primitives

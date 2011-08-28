@@ -26,7 +26,7 @@ module Data.Array.Accelerate.OpenCL.State (
 ) where
 
 -- friends
--- import Data.Array.Accelerate.OpenCL.Analysis.Device
+import Data.Array.Accelerate.OpenCL.Analysis.Device
 import Data.Array.Accelerate.OpenCL.Analysis.Hash
 import qualified Data.Array.Accelerate.Array.Data       as AD
 
@@ -45,18 +45,20 @@ import Control.Monad.State.Strict                       (StateT(..))
 --import System.Mem.Weak
 import System.IO.Unsafe
 import Foreign.Ptr
---import qualified Foreign.CUDA.Driver                    as CUDA
+
 import qualified Data.HashTable                         as Hash
 
 import Foreign.OpenCL.Bindings
 
--- #ifdef ACCELERATE_CUDA_PERSISTENT_CACHE
--- import Data.Binary                                      (encodeFile, decodeFile)
--- import Control.Arrow                                    (second)
--- import Paths_accelerate                                 (getDataDir)
--- #endif
+#ifdef ACCELERATE_OPENCL_PERSISTENT_CACHE
+import System.Directory
+import System.FilePath
+import Data.Binary                                      (encodeFile, decodeFile)
+import Control.Arrow                                    (second)
+import Paths_accelerate_opencl                          (getDataDir)
+#endif
 
--- #include "accelerate.h"
+#include "accelerate.h"
 
 
 -- An exact association between an accelerate computation and its
@@ -124,10 +126,8 @@ data OpenCLState = OpenCLState
     , _cl_platform :: PlatformID
     , _cl_devices  :: [(DeviceID, CommandQueue)]
     , _cl_context  :: Context
---    , _translTable :: [CUTranslSkel]
     , _kernelTable :: KernelTable
     , _memoryTable :: MemoryTable
---    , _computeTable  :: AccHashTable AccNode
     }
 
 $(mkLabels [''OpenCLState, ''KernelEntry])
@@ -136,62 +136,58 @@ $(mkLabels [''OpenCLState, ''KernelEntry])
 -- Execution State
 -- ---------------
 
--- #ifdef ACCELERATE_CUDA_PERSISTENT_CACHE
--- indexFileName :: IO FilePath
--- indexFileName = do
---   tmp <- (</> "cache") `fmap` getDataDir
---   dir <- createDirectoryIfMissing True tmp >> canonicalizePath tmp
---   return (dir </> "_index")
--- #endif
+#ifdef ACCELERATE_OPENCL_PERSISTENT_CACHE
+indexFileName :: IO FilePath
+indexFileName = do
+  tmp <- (</> "cache") `fmap` getDataDir
+  dir <- createDirectoryIfMissing True tmp >> canonicalizePath tmp
+  return (dir </> "_index")
+#endif
 
--- -- Store the kernel module map to file
--- --
--- saveIndexFile :: OpenCLState -> IO ()
--- #ifdef ACCELERATE_CUDA_PERSISTENT_CACHE
--- saveIndexFile s = do
---   ind <- indexFileName
---   encodeFile ind . map (second _kernelName) =<< Hash.toList (_kernelTable s)
--- #else
--- saveIndexFile _ = return ()
--- #endif
+-- Store the kernel module map to file
+--
+saveIndexFile :: OpenCLState -> IO ()
+#ifdef ACCELERATE_OPENCL_PERSISTENT_CACHE
+saveIndexFile s = do
+  ind <- indexFileName
+  encodeFile ind . map (second _kernelName) =<< Hash.toList (_kernelTable s)
+#else
+saveIndexFile _ = return ()
+#endif
 
--- -- Read the kernel index map file (if it exists), loading modules into the
--- -- current context
--- --
--- loadIndexFile :: IO (KernelTable, Int)
--- #ifdef ACCELERATE_CUDA_PERSISTENT_CACHE
--- loadIndexFile = do
---   f <- indexFileName
---   x <- doesFileExist f
---   e <- if x then mapM reload =<< decodeFile f
---             else return []
---   (,length e) <$> Hash.fromList hashAccKey e
---   where
---     reload (k,n) = (k,) . KernelEntry n . Right <$> CUDA.loadFile (n `replaceExtension` ".cubin")
--- #else
--- loadIndexFile = (,0) <$> Hash.new (==) hashAccKey
--- #endif
+-- Read the kernel index map file (if it exists), loading modules into the
+-- current context
+--
+loadIndexFile :: IO (KernelTable, Int)
+#ifdef ACCELERATE_OPENCL_PERSISTENT_CACHE
+loadIndexFile = do
+  f <- indexFileName
+  x <- doesFileExist f
+  e <- if x then mapM reload =<< decodeFile f
+            else return []
+  (,length e) <$> Hash.fromList hashAccKey e
+  where
+    reload (k,n) = (k,) . KernelEntry n . Right <$> CUDA.loadFile (n `replaceExtension` ".clbin")
+#else
+loadIndexFile = (,0) <$> Hash.new (==) hashAccKey
+#endif
 
-
-
--- -- Select and initialise the CUDA device, and create a new execution context.
--- -- This will be done only once per program execution, as initialising the CUDA
--- -- context is relatively expensive.
--- --
--- -- Would like to put the finaliser on the state token, since finalising the
--- -- context affects the various hash tables. However, this places the finaliser
--- -- on the CUDAState "box", and the box is removed by optimisations causing the
--- -- finaliser to fire prematurely.
--- --
--- initialise :: IO OpenCLState
--- initialise = do
---   CUDA.initialise []
---   (d,prp) <- selectBestDevice
---   ctx     <- CUDA.create d [CUDA.SchedAuto]
---   (knl,n) <- loadIndexFile
---   addFinalizer ctx (CUDA.destroy ctx)
---   return $ OpenCLState n prp ctx knl undefined
-
+-- Selects the OpenCL platform with the highest compute capacity and
+-- build OpenCL-state from the devices of this platform
+initialise :: IO OpenCLState
+initialise = do
+  (platform, devices) <- selectBestPlatform
+  context <- createContext devices [ContextPlatform platform]
+  queues <- mapM (flip (createCommandQueue context) [QueueOutOfOrderExecModeEnable]) devices
+  knl <- Hash.new (==) hashAccKey
+  return $ OpenCLState
+    { _unique = 0
+    , _cl_platform = platform
+    , _cl_devices = zip devices queues
+    , _cl_context = context
+    , _kernelTable = knl
+    , _memoryTable = error "Memory table not initialized"
+    }
 
 -- | Evaluate a OpenCL array computation under the standard global environment
 --
@@ -219,44 +215,8 @@ runOpenCLWith state acc = do
     sanitise :: OpenCLState -> IO OpenCLState
     sanitise st = do
       entries <- filter (isJust . getL refcount . snd) <$> Hash.toList (getL memoryTable st)
-      --INTERNAL_ASSERT "runOpenCL.sanitise" (null entries) -- TODO uncomment check
-      return (setL memoryTable undefined st)
-
-
--- Selects the OpenCL platform with the highest compute capacity and
--- build OpenCL-state from the devices of this platform
-initialise :: IO OpenCLState
-initialise = do
-  platforms <- getPlatformIDs
-  devices <- mapM (getDeviceIDs DeviceTypeAll) platforms
-  maxFlops <- mapM (liftM sum . mapM deviceFlops) devices :: IO [Word32]
-  let (platform, devs, _) = head . sortWith third $ zip3 platforms devices maxFlops
-  context <- createContext devs [ContextPlatform platform]
-  queues <- mapM (flip (createCommandQueue context) [QueueOutOfOrderExecModeEnable]) devs
-  knl <- Hash.new (==) hashAccKey
-  return $ OpenCLState
-    { _unique = 0
-    , _cl_platform = platform
-    , _cl_devices = zip devs queues
-    , _cl_context = context
---    , _translTable = []
-    , _kernelTable = knl
-    , _memoryTable = error "Memory table not initialized"
---    , _computeTable = error "Compute table not initialized"
-    }
-  where
-    third (_,_,c) = c
-
--- Compute the number of flops provided by a device
-deviceFlops :: DeviceID -> IO Word32
-deviceFlops dev = do
-  cores <- deviceMaxComputeUnits dev
-  clockFreq <- deviceMaxClockFrequency dev
-  return $ cores * clockFreq
-
--- Sort using a function that projects values to ordinals
-sortWith :: Ord b => (a -> b) -> [a] -> [a]
-sortWith f = sortBy (\x y -> compare (f x) (f y))
+      INTERNAL_ASSERT "runOpenCL.sanitise" (null entries)
+        $ return (setL memoryTable undefined st)
 
 
 -- Nasty global statesses

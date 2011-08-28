@@ -21,7 +21,7 @@ module Data.Array.Accelerate.OpenCL.Compile (
 
 ) where
 
--- #include "accelerate.h"
+#include "accelerate.h"
 
 -- friends
 import Data.Array.Accelerate.Type
@@ -54,7 +54,7 @@ import System.Directory
 --import Text.PrettyPrint
 --import Foreign.Storable
 import qualified Data.HashTable                         as Hash
---import qualified Foreign.CUDA.Driver                    as CUDA
+
 import qualified Foreign.OpenCL.Bindings                as OpenCL
 
 import Paths_accelerate_opencl                          (getDataDir)
@@ -65,7 +65,7 @@ import Paths_accelerate_opencl                          (getDataDir)
 type AccKernel a = (String, CIO OpenCL.Program)
 
 noKernel :: AccKernel a
-noKernel = error "no kernel module for this node" --INTERNAL_ERROR(error) "ExecAcc" "no kernel module for this node"
+noKernel = INTERNAL_ERROR(error) "ExecAcc" "no kernel module for this node"
 
 -- The number of times an array computation will be used. This is an overzealous
 -- estimate, due to the presence of array branching. Only the scanl' and scanr'
@@ -79,7 +79,7 @@ instance Show AccRefcount where
   show (R2 x y) = show (x,y)
 
 noRefcount :: AccRefcount
-noRefcount = error "no reference count for this node" --INTERNAL_ERROR(error) "ExecAcc" "no reference count for this node"
+noRefcount = INTERNAL_ERROR(error) "ExecAcc" "no reference count for this node"
 
 singleRef :: AccRefcount
 singleRef = R1 1
@@ -102,7 +102,7 @@ incIdx :: Idx env t -> Ref count -> Ref count
 incIdx = modIdx incR1
   where
     incR1 (R1 x) = R1 (x+1)
-    incR1 _      = error "inconsistent valuation" --INTERNAL_ERROR(error) "incR1" "inconsistent valuation"
+    incR1 _      = INTERNAL_ERROR(error) "incR1" "inconsistent valuation"
 
 modIdx :: (AccRefcount -> AccRefcount) -> Idx env t -> Ref count -> Ref count
 modIdx f (SuccIdx ix) (Push next c) = modIdx f ix next `Push` c
@@ -110,7 +110,7 @@ modIdx f ZeroIdx      (Push rest c) =
   case c of
     Left (IRef ix' f') -> modIdx f' ix' rest `Push` c
     Right n            -> rest               `Push` Right (f n)
-modIdx _ _            _             = error "inconsistent valuation" --INTERNAL_ERROR(error) "modIdx" "inconsistent valuation"
+modIdx _ _            _             = INTERNAL_ERROR(error) "modIdx" "inconsistent valuation"
 
 
 -- Interleave execution state annotations into an open array computation AST
@@ -414,7 +414,7 @@ prepareAcc iss rootAcc rootEnv = do
         Var ix          -> return (Var ix, aenv, vars)
         Const c         -> return (Const c, aenv, vars)
         PrimConst c     -> return (PrimConst c, aenv, vars)
-        IndexAny        -> error "IndexAny: not implemented yet" --INTERNAL_ERROR(error) "prepareAcc" "IndexAny: not implemented yet"
+        IndexAny        -> INTERNAL_ERROR(error) "prepareAcc" "IndexAny: not implemented yet"
         IndexNil        -> return (IndexNil, aenv, vars)
         IndexCons ix i  -> do
           (ix', env1, var1) <- travE ix aenv vars
@@ -508,17 +508,17 @@ prepareAcc iss rootAcc rootEnv = do
 
     incSucc :: AccRefcount -> AccRefcount
     incSucc (R2 x y) = R2 (x+1) y
-    incSucc _        = error "inconsistent valuation" -- INTERNAL_ERROR(error) "incSucc" "inconsistent valuation"
+    incSucc _        = INTERNAL_ERROR(error) "incSucc" "inconsistent valuation"
 
     incZero :: AccRefcount -> AccRefcount
     incZero (R2 x y) = R2 x (y+1)
-    incZero _        = error "inconsistent valuation" -- INTERNAL_ERROR(error) "incZero" "inconsistent valuation"
+    incZero _        = INTERNAL_ERROR(error) "incZero" "inconsistent valuation"
 
     eitherIx :: Idx env t -> f -> f -> f
     eitherIx ZeroIdx           _ z = z
     eitherIx (SuccIdx ZeroIdx) s _ = s
     eitherIx _                 _ _ =
-      error "inconsistent valuation" -- INTERNAL_ERROR(error) "eitherIx" "inconsistent valuation"
+      INTERNAL_ERROR(error) "eitherIx" "inconsistent valuation"
 
     setref :: AccRefcount -> ExecOpenAcc aenv a -> ExecOpenAcc aenv a
     setref count (ExecAfun _ fun)     = ExecAfun count fun
@@ -531,7 +531,7 @@ prepareAcc iss rootAcc rootEnv = do
     bind :: (Shape sh, Elt e) => ExecOpenAcc aenv (Array sh e) -> AccBinding aenv
     bind (ExecAcc _ _ _ (Avar ix)) = ArrayVar ix
     bind _                         =
-     error "expected array variable" -- INTERNAL_ERROR(error) "bind" "expected array variable"
+     INTERNAL_ERROR(error) "bind" "expected array variable"
 
 
 -- Compilation
@@ -571,7 +571,7 @@ memo mvar fun = do
 --
 link :: KernelTable -> AccKey -> IO OpenCL.Program
 link table key =
-  let intErr = error "missing kernel entry" --INTERNAL_ERROR(error) "link" "missing kernel entry"
+  let intErr = INTERNAL_ERROR(error) "link" "missing kernel entry"
   in do
     (KernelEntry cufile prog) <- fromMaybe intErr `fmap` Hash.lookup table key
     return prog

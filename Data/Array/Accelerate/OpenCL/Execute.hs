@@ -45,11 +45,10 @@ import Control.Monad.Trans
 import System.IO.Unsafe
 
 import Foreign.Ptr (Ptr)
---import qualified Foreign.CUDA.Driver                            as CUDA
 
 import qualified Foreign.OpenCL.Bindings                                  as OpenCL
 
--- #include "accelerate.h"
+#include "accelerate.h"
 
 
 -- Array expression evaluation
@@ -229,21 +228,21 @@ executeOpenAcc (ExecAcc count kernel bindings acc) aenv =
     --   stencil2Op c kernel bindings acc aenv a1 a0
 
 executeOpenAcc (ExecAfun _ _) _ =
-  error "impossible evaluation" -- INTERNAL_ERROR(error) "executeOpenAcc" "impossible evaluation"
+  INTERNAL_ERROR(error) "executeOpenAcc" "impossible evaluation"
 
 
 -- Implementation of primitive array operations
 -- --------------------------------------------
 
--- reshapeOp :: Shape dim
---           => Int
---           -> dim
---           -> Array dim' e
---           -> CIO (Array dim e)
--- reshapeOp rc newShape (Array oldShape adata)
---   = BOUNDS_CHECK(check) "reshape" "shape mismatch" (Sugar.size newShape == size oldShape)
---   $ do when (rc-1 > 0) $ touchArray adata (rc-1)
---        return          $ Array (fromElt newShape) adata
+reshapeOp :: Shape dim
+          => Int
+          -> dim
+          -> Array dim' e
+          -> CIO (Array dim e)
+reshapeOp rc newShape (Array oldShape adata)
+  = BOUNDS_CHECK(check) "reshape" "shape mismatch" (Sugar.size newShape == size oldShape)
+  $ do when (rc-1 > 0) $ touchArray adata (rc-1)
+       return          $ Array (fromElt newShape) adata
 
 
 unitOp :: Elt e
@@ -297,33 +296,33 @@ replicateOp c kernel bindings acc aenv sliceIndex slix (Array sh0 in0) = do
     extend (SliceFixed sliceIdx) (slx,sz) sl      = (extend sliceIdx slx sl, sz)
 
 
--- indexOp :: (Shape sl, Elt slix)
---         => Int
---         -> AccKernel (Array dim e)
---         -> [AccBinding aenv]
---         -> PreOpenAcc ExecOpenAcc aenv (Array sl e)
---         -> Val aenv
---         -> SliceIndex (EltRepr slix) (EltRepr sl) co (EltRepr dim)
---         -> Array dim e
---         -> slix
---         -> CIO (Array sl e)
--- indexOp c kernel bindings acc aenv sliceIndex (Array sh0 in0) slix = do
---   res@(Array sh out) <- newArray c (toElt $ restrict sliceIndex (fromElt slix) sh0)
---   execute kernel bindings acc aenv (size sh)
---     ((((((),out),in0),convertIx sh),convertSlix sliceIndex (fromElt slix)),convertIx sh0)
---   freeArray in0
---   return res
---   where
---     restrict :: SliceIndex slix sl co dim -> slix -> dim -> sl
---     restrict (SliceNil)            ()       ()      = ()
---     restrict (SliceAll sliceIdx)   (slx,()) (sh,sz) = (restrict sliceIdx slx sh, sz)
---     restrict (SliceFixed sliceIdx) (slx,i)  (sh,sz)
---       = BOUNDS_CHECK(checkIndex) "slice" i sz $ restrict sliceIdx slx sh
---     --
---     convertSlix :: SliceIndex slix sl co dim -> slix -> [Int32]
---     convertSlix (SliceNil)            ()     = []
---     convertSlix (SliceAll   sliceIdx) (s,()) = convertSlix sliceIdx s
---     convertSlix (SliceFixed sliceIdx) (s,i)  = fromIntegral i : convertSlix sliceIdx s
+indexOp :: (Shape sl, Elt slix)
+        => Int
+        -> AccKernel (Array dim e)
+        -> [AccBinding aenv]
+        -> PreOpenAcc ExecOpenAcc aenv (Array sl e)
+        -> Val aenv
+        -> SliceIndex (EltRepr slix) (EltRepr sl) co (EltRepr dim)
+        -> Array dim e
+        -> slix
+        -> CIO (Array sl e)
+indexOp c kernel bindings acc aenv sliceIndex (Array sh0 in0) slix = do
+  res@(Array sh out) <- newArray c (toElt $ restrict sliceIndex (fromElt slix) sh0)
+  execute kernel bindings acc aenv (size sh)
+    ((((((),out),in0),convertIx sh),convertSlix sliceIndex (fromElt slix)),convertIx sh0)
+  freeArray in0
+  return res
+  where
+    restrict :: SliceIndex slix sl co dim -> slix -> dim -> sl
+    restrict (SliceNil)            ()       ()      = ()
+    restrict (SliceAll sliceIdx)   (slx,()) (sh,sz) = (restrict sliceIdx slx sh, sz)
+    restrict (SliceFixed sliceIdx) (slx,i)  (sh,sz)
+      = BOUNDS_CHECK(checkIndex) "slice" i sz $ restrict sliceIdx slx sh
+    --
+    convertSlix :: SliceIndex slix sl co dim -> slix -> [Int32]
+    convertSlix (SliceNil)            ()     = []
+    convertSlix (SliceAll   sliceIdx) (s,()) = convertSlix sliceIdx s
+    convertSlix (SliceFixed sliceIdx) (s,i)  = fromIntegral i : convertSlix sliceIdx s
 
 
 mapOp :: Elt e
@@ -569,7 +568,7 @@ executeOpenExp (PrimConst c)     _   _    = return $ I.evalPrimConst c
 executeOpenExp (PrimApp fun arg) env aenv = I.evalPrim fun <$> executeOpenExp arg env aenv
 executeOpenExp (Tuple tup)       env aenv = toTuple                   <$> executeTuple tup env aenv
 executeOpenExp (Prj idx e)       env aenv = I.evalPrj idx . fromTuple <$> executeOpenExp e env aenv
-executeOpenExp IndexAny          _   _    = error "IndexAny: not implemented yet" -- INTERNAL_ERROR(error) "executeOpenExp" "IndexAny: not implemented yet"
+executeOpenExp IndexAny          _   _    = INTERNAL_ERROR(error) "executeOpenExp" "IndexAny: not implemented yet"
 executeOpenExp IndexNil          _   _    = return Z
 executeOpenExp (IndexCons sh i)  env aenv = (:.) <$> executeOpenExp sh env aenv <*> executeOpenExp i env aenv
 executeOpenExp (IndexHead ix)    env aenv = (\(_:.h) -> h) <$> executeOpenExp ix env aenv

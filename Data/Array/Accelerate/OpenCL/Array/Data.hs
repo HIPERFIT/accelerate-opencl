@@ -46,13 +46,10 @@ import qualified Data.HashTable                         as Hash
 import Data.Array.Accelerate.OpenCL.State
 import qualified Data.Array.Accelerate.Array.Data       as AD
 import           Data.Array.Accelerate.Array.Data       (ArrayEltR(..))
--- import qualified Foreign.CUDA.Driver                    as CUDA
--- import qualified Foreign.CUDA.Driver.Stream             as CUDA
--- import qualified Foreign.CUDA.Driver.Texture            as CUDA
 
 import qualified Foreign.OpenCL.Bindings                as OpenCL
 
--- #include "accelerate.h"
+#include "accelerate.h"
 
 
 -- Array Operations
@@ -556,7 +553,7 @@ arena :: (DevicePtrs e ~ OpenCL.MemObject b, Typeable b)
       -> OpenCL.MemObject b
 arena _ (MemoryEntry _ p)
   | Just ptr <- gcast p = ptr
-  | otherwise           = error "type mismatch" --INTERNAL_ERROR(error) "arena" "type mismatch"
+  | otherwise           = INTERNAL_ERROR(error) "arena" "type mismatch"
 
 -- Generate a memory map key from the given ArrayData
 --
@@ -576,7 +573,7 @@ lookupArray ad = do
   x <- liftIO $ Hash.lookup t (arrayToKey ad)
   case x of
        Just e -> return e
-       _      -> error "lost dev mem ref" --INTERNAL_ERROR(error) "lookupArray" "lost device memory reference"
+       _      -> INTERNAL_ERROR(error) "lookupArray" "lost device memory reference"
                  -- TLM: better if the file/line markings are of the use site
 
 -- Update (or insert) a memory entry into the state structure
@@ -602,7 +599,7 @@ deleteArray ad = do
   val <- liftIO $ Hash.lookup tab key
   case val of
        Just m -> liftIO $ OpenCL.free (arena ad m) >> Hash.delete tab key
-       _      -> error "lost device mem ref: double free?" -- INTERNAL_ERROR(error) "deleteArray" "lost device memory reference: double free?"
+       _      -> INTERNAL_ERROR(error) "deleteArray" "lost device memory reference: double free?"
 
 -- Return the device pointer associated with a host-side Accelerate array
 --

@@ -17,7 +17,7 @@ module Data.Array.Accelerate.OpenCL.Analysis.Hash (
 
 import Data.Char
 --import Language.C hiding (Index, Exp)
---import Text.PrettyPrint
+import Text.PrettyPrint.Mainland
 import Codec.Compression.Zlib
 import Data.ByteString.Lazy.Char8                       (ByteString)
 import qualified Data.ByteString.Lazy.Char8             as L
@@ -32,7 +32,7 @@ import Data.Array.Accelerate.OpenCL.CodeGen
 import Data.Array.Accelerate.Array.Representation
 import qualified Data.Array.Accelerate.Array.Sugar      as Sugar
 
--- #include "accelerate.h"
+#include "accelerate.h"
 
 
 type AccKey = ByteString
@@ -83,12 +83,12 @@ showAcc acc@(OpenAcc pacc) =
     Stencil f _ a      -> chr 199 : showTy (accType a) ++ showFun f
     Stencil2 f _ x _ y -> chr 313 : showTy (accType x) ++ showTy (accType y) ++ showFun f
     _                  ->
-      let msg = unlines ["incomplete patterns for key generation", doc]
+      let msg = unlines ["incomplete patterns for key generation", pretty 100 (nest 2 doc)]
           ppr = show acc
-          doc | length ppr <= 250 = ppr
-              | otherwise         = (take 250 ppr) ++ "... {truncated}"
+          doc | length ppr <= 250 = text ppr
+              | otherwise         = text (take 250 ppr) <+> text "... {truncated}"
       in
-      error $ "accToKey: " ++ msg
+      INTERNAL_ERROR(error) "accToKey" msg
 
   where
     showTy :: TupleType a -> String
@@ -96,11 +96,12 @@ showAcc acc@(OpenAcc pacc) =
     showTy (SingleTuple ty) = show ty
     showTy (PairTuple a b)  = showTy a ++ showTy b
 
+
     showFun :: OpenFun env aenv a -> String
-    showFun = unlines . map show . codeGenFun
+    showFun = pretty 100 . cat . map ppr . codeGenFun
 
     showExp :: OpenExp env aenv a -> String
-    showExp = unlines . map show . codeGenExp
+    showExp = pretty 100 . cat . map ppr . codeGenExp
 
     showSI :: SliceIndex (Sugar.EltRepr slix) (Sugar.EltRepr sl) co (Sugar.EltRepr dim)
            -> Exp aenv slix                         {- dummy -}
