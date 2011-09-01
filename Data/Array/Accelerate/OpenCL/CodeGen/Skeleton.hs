@@ -117,21 +117,20 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Monad
 -- ---
 mkMap :: [C.Type] -> [C.Type] -> C.Exp -> CUTranslSkel
 mkMap tyOut tyIn_A apply = runCGM $ do
-  Set set <- mkOutputTuple tyOut
-  Get get <- mkInputTuple "A" tyIn_A
+  d_out <- mkOutputTuple tyOut
+  d_inA <- mkInputTuple "A" tyIn_A
   mkApply 1 apply
 
   ps <- getParams
   addDefinitions
     [cunit|
-       __kernel void map (const int shape, $params:ps) {
-         int idx;
-         const int gridSize = get_global_size(0);
+       __kernel void map (const $ty:ix shape, $params:ps) {
+         const $ty:ix gridSize = get_global_size(0);
 
-         for(idx = get_global_id(0); idx < shape; idx += gridSize) {
-           $ty:(typename "TyInA") val = $exp:(get "idx") ;
+         for($ty:ix idx = get_global_id(0); idx < shape; idx += gridSize) {
+           $ty:(typename "TyInA") val = getA("idx", $args:d_inA) ;
            $ty:outType new = apply(val) ;
-           $exp:(set "idx" "new") ;
+           set("idx" "new", $args:d_out) ;
          }
        }
     |]
@@ -141,9 +140,9 @@ mkZipWith :: ([C.Type], Int)
           ->([C.Type], Int) -> C.Exp -> CUTranslSkel
 mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
   runCGM $ do
-    Set set <- mkOutputTuple tyOut
-    Get getA <- mkInputTuple "A" tyInA
-    Get getB <- mkInputTuple "B" tyInB
+    d_out <- mkOutputTuple tyOut
+    d_inA <- mkInputTuple "A" tyInA
+    d_inB <- mkInputTuple "B" tyInB
     mkApply 2 apply
 
     shape_out <- mkShape "DimOut" dimOut
@@ -164,10 +163,8 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
              $ty:ix iA = $id:(toIndex dimInB)(shInB, $id:(fromIndex dimInB)(shOut, ix));
              $ty:ix iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
 
-             $ty:(typename "TyInB") valB = $exp:(getB "iB") ;
-             $ty:(typename "TyInA") valA = $exp:(getA "iA") ;
-             $ty:outType new = apply(valB, valA) ;
-             $exp:(set "ix" "new") ;
+             $ty:outType val = apply(getB("iB", $args:d_inB), getA("iA", $args:d_inA)) ;
+             set("ix" "val", $args:d_out) ;
            }
          }
       |]
@@ -270,7 +267,7 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
 
 mkPermute :: [C.Type] -> Int -> Int -> C.Exp -> C.Exp -> CUTranslSkel
 mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
-    (Set set : Get get : _) <- mkTupleTypeAsc 2 ty
+    (d_out, d_inA : _) <- mkTupleTypeAsc 2 ty
     shape_out <- mkShape "DimOut" dimOut
     shape_inA <- mkShape "DimInA" dimInA
 
@@ -283,7 +280,7 @@ mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
          __kernel void permute (const $ty:shape_out shOut,
                                 const $ty:shape_inA shInA,
                                 $params:ps) {
-             const $ty:ix shapeSize = $id:(size dimInA)(shIn0);
+             const $ty:ix shapeSize = $id:(size dimInA)(shInA);
              const $ty:ix gridSize  = get_global_size(0);
 
              for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
@@ -293,12 +290,9 @@ mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
                  if (!ignore(dst)) {
                      $ty:ix j = $id:(toIndex dimOut)(shOut, dst);
 
-                     $ty:(typename "TyOut") valB = $exp:(get "j") ;
-                     $ty:(typename "TyInA") valA = $exp:(get "ix") ;
-                     $ty:outType new = apply(valB, valA) ;
-                     $exp:(set "j" "new") ;
-
-                     //set(d_out, j, apply(get0(d_in0, ix), get0(d_out, j)));
+                     $ty:outType val = apply(getA("j", $args:d_out),
+                                             getA("ix", $args:d_inA)) ;
+                     set("j" "val", $args:d_out) ;
                  }
              }
          }

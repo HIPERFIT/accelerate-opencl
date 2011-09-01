@@ -11,7 +11,7 @@
 
 module Data.Array.Accelerate.OpenCL.CodeGen.Tuple
   (
-    mkInputTuple, mkOutputTuple, Accessor (..),
+    mkInputTuple, mkOutputTuple, --Accessor (..),
     mkTupleTypeAsc
     --    mkTupleType, mkTuplePartition
   )
@@ -31,16 +31,18 @@ import Control.Monad
 
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
 
-data Accessor = Get (String -> Exp)
-              | Set (String -> String -> Exp)
+-- data Accessor = Get (String -> Exp)
+--               | Set (String -> String -> Exp)
 
-mkInputTuple :: String -> [Type]-> CGM Accessor
+type Arguments = [Exp]
+
+mkInputTuple :: String -> [Type]-> CGM Arguments
 mkInputTuple subscript types = mkTupleType (Just subscript) types
 
-mkOutputTuple :: [Type]-> CGM Accessor
+mkOutputTuple :: [Type]-> CGM Arguments
 mkOutputTuple types = mkTupleType Nothing types
 
-mkTupleType :: Maybe String -> [Type] -> CGM Accessor
+mkTupleType :: Maybe String -> [Type] -> CGM Arguments
 mkTupleType subscript types = do
   let n = length types
       tuple_name = maybe "TyOut" ("TyIn" ++) subscript
@@ -50,16 +52,16 @@ mkTupleType subscript types = do
         | otherwise = [tuple_name]
 
   addDefinitions $ zipWith (mkTypedef volatile) tynames types
-  accessorCall <- mkParameterList subscript n tynames
+  args <- mkParameterList subscript n tynames
   (maybe mkSet mkGet subscript) n tynames
   when (n > 1) $ addDefinition (mkStruct tuple_name volatile types)
-  return accessorCall
+  return args
 
-mkTupleTypeAsc :: Int -> [Type] -> CGM [Accessor]
+mkTupleTypeAsc :: Int -> [Type] -> CGM (Arguments, [Arguments])
 mkTupleTypeAsc n types = do
-  accessorOut <- mkOutputTuple types
-  accessorsIn <- mkInputTuples (n-1)
-  return $ accessorOut : accessorsIn
+  argsOut <- mkOutputTuple types
+  argsIn <- mkInputTuples (n-1)
+  return $ (argsOut, argsIn)
   where
     mkInputTuples 0 = return []
     mkInputTuples n = do
@@ -67,10 +69,10 @@ mkTupleTypeAsc n types = do
       a <- mkInputTuple (show $ n-1) types
       return $ a : as
 
-mkParameterList :: Maybe String -> Int -> [String] -> CGM Accessor
+mkParameterList :: Maybe String -> Int -> [String] -> CGM Arguments
 mkParameterList subscript n tynames = do
   addParams $ params (zip types' param_names)
-  return accessorCall
+  return args
   where
     param_prefix = maybe "out" ("in" ++) subscript
     param_names
@@ -79,10 +81,10 @@ mkParameterList subscript n tynames = do
     types' = map (mkPtr . mkGlobal . typename) tynames
 
     args = map (\p -> [cexp|$id:p|]) param_names
-    accessorCall =
-      case subscript of
-        Nothing -> Set $ \idx val -> [cexp|set($id:idx, $id:val, $args:args)|]
-        Just x  -> Get $ \idx -> [cexp|$id:("get" ++ x)($id:idx, $args:args)|]
+    -- accessorCall =
+    --   case subscript of
+    --     Nothing -> Set $ \idx val -> [cexp|set($id:idx, $id:val, $args:args)|]
+    --     Just x  -> Get $ \idx -> [cexp|$id:("get" ++ x)($id:idx, $args:args)|]
 
 mkGet :: String -> Int -> [String] -> CGM ()
 mkGet prj n tynames = do
