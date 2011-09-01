@@ -9,11 +9,13 @@ import Language.C.Quote.OpenCL
 import Data.Loc
 import Data.Symbol
 
+import Data.Array.Accelerate.OpenCL.CodeGen.Monad
+
 data Direction = Forward | Backward
 
 -- Types
-ixType :: Type
-ixType = typename "Ix"
+ix :: Type
+ix = typename "Ix"
 
 outType :: Type
 outType = typename "TyOut"
@@ -26,14 +28,19 @@ outType = typename "TyOut"
 mkIdentity :: Exp -> Definition
 mkIdentity = mkDeviceFun "identity" (typename "TyOut") []
 
-mkApply :: Int -> Exp -> Definition
-mkApply argc
-  = mkDeviceFun "apply" outType
-  $ params $ map (\c -> (typename ("TyIn"++ [c]), 'x' : [c])) $ reverse $ take argc ['A'..]
+mkApply :: Int -> Exp -> CGM ()
+mkApply argc exp
+  = addDefinition $
+      (mkDeviceFun "apply" outType
+       $ params $ map (\c -> (typename ("TyIn"++ [c]), 'x' : [c])) $ reverse $ take argc ['A'..]) exp
 
-mkProject :: Direction -> Exp -> Definition
-mkProject Forward  = mkDeviceFun "project" (typename "DimOut") $ params [(typename "DimIn0","x0")]
-mkProject Backward = mkDeviceFun "project" (typename "DimIn0") $ params [(typename "DimOut","x0")]
+mkProject :: Direction -> Exp -> CGM ()
+mkProject Forward exp =
+  addDefinition $
+    (mkDeviceFun "project" (typename "DimOut") $ params [(typename "DimIn0","x0")]) exp
+mkProject Backward exp =
+  addDefinition $
+    (mkDeviceFun "project" (typename "DimIn0") $ params [(typename "DimOut","x0")]) exp
 
 mkSliceIndex :: Exp -> Definition
 mkSliceIndex =
@@ -100,12 +107,14 @@ mkTypedef volatile tyname typ | volatile = let typ' = mkVolatile typ
                                            in [cedecl|typedef $ty:typ' $id:tyname;|]
                               | otherwise = [cedecl|typedef $ty:typ $id:tyname;|]
 
-mkShape :: String -> Int -> (Type, Definition)
-mkShape name dim = (typename name, typedef)
+mkShape :: String -> Int -> CGM Type
+mkShape name dim = do
+  addDefinition typedef
+  return $ typename name
  where
    typedef | dim == 0  = [cedecl| typedef void* $id:name; |]
-           | dim == 1  = [cedecl| typedef $ty:ixType $id:name; |]
-           | otherwise = mkStruct name False (replicate dim ixType)
+           | dim == 1  = [cedecl| typedef $ty:ix $id:name; |]
+           | otherwise = mkStruct name False (replicate dim ix)
 
 toIndex :: Int -> String
 toIndex dim = "toIndexDIM" ++ show dim

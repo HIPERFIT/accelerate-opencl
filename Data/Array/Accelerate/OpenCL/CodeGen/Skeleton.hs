@@ -17,7 +17,7 @@ module Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
     mkMap, mkZipWith,
 --    mkStencil, mkStencil2,
 --    mkScanl, mkScanr, mkScanl', mkScanr', mkScanl1, mkScanr1,
---    mkPermute, mkBackpermute, mkIndex, mkReplicate
+    mkPermute --, mkBackpermute, mkIndex, mkReplicate
   )
   where
 
@@ -34,6 +34,7 @@ import Data.Symbol
 import Data.Array.Accelerate.OpenCL.CodeGen.Data
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
 import Data.Array.Accelerate.OpenCL.CodeGen.Tuple
+import Data.Array.Accelerate.OpenCL.CodeGen.Monad
 --import Data.Array.Accelerate.CUDA.CodeGen.Stencil
 
 
@@ -115,67 +116,61 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Tuple
 -- Map
 -- ---
 mkMap :: [C.Type] -> [C.Type] -> C.Exp -> CUTranslSkel
-mkMap tyOut tyIn_A apply = CUTranslSkel $ outputdefs ++ inputdefs ++ [apply'] ++ skel
-  where
-    (outputdefs, out_params, Set callSet) = mkOutputTuple tyOut
-    (inputdefs, in_params, Get callGet) = mkInputTuple "A" tyIn_A
+mkMap tyOut tyIn_A apply = runCGM $ do
+  Set set <- mkOutputTuple tyOut
+  Get get <- mkInputTuple "A" tyIn_A
+  mkApply 1 apply
 
-    skel :: [Definition]
-    skel = [cunit|
-              __kernel void map (const int shape, $params:(out_params ++ in_params)) {
-                int idx;
-                const int gridSize = get_global_size(0);
+  ps <- getParams
+  addDefinitions
+    [cunit|
+       __kernel void map (const int shape, $params:ps) {
+         int idx;
+         const int gridSize = get_global_size(0);
 
-                for(idx = get_global_id(0); idx < shape; idx += gridSize) {
-                  $ty:(typename "TyInA") val = $exp:(callGet "idx") ;
-                  $ty:outType new = apply(val) ;
-                  $exp:(callSet "idx" "new") ;
-                }
-              }
-           |]
-
-    apply' :: Definition
-    apply' = mkApply 1 apply
-
+         for(idx = get_global_id(0); idx < shape; idx += gridSize) {
+           $ty:(typename "TyInA") val = $exp:(get "idx") ;
+           $ty:outType new = apply(val) ;
+           $exp:(set "idx" "new") ;
+         }
+       }
+    |]
 
 mkZipWith :: ([C.Type], Int)
           -> ([C.Type], Int)
           ->([C.Type], Int) -> C.Exp -> CUTranslSkel
 mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
-      CUTranslSkel $ outputdefs ++ inputdefsA ++ inputdefsB ++
-                     [sh_out_def, sh_inB_def, sh_inA_def, apply'] ++ skel
-  where
-    (outputdefs, out_params, Set callSet) = mkOutputTuple tyOut
-    (inputdefsA, in_paramsA, Get callGetA) = mkInputTuple "A" tyInA
-    (inputdefsB, in_paramsB, Get callGetB) = mkInputTuple "B" tyInB
+  runCGM $ do
+    Set set <- mkOutputTuple tyOut
+    Get getA <- mkInputTuple "A" tyInA
+    Get getB <- mkInputTuple "B" tyInB
+    mkApply 2 apply
 
-    (sh_out_type, sh_out_def) = mkShape "DimOut" dimOut
-    (sh_inB_type, sh_inB_def) = mkShape "DimInB" dimInB
-    (sh_inA_type, sh_inA_def) = mkShape "DimInA" dimInA
+    shape_out <- mkShape "DimOut" dimOut
+    shape_inB <- mkShape "DimInB" dimInB
+    shape_inA <- mkShape "DimInA" dimInA
 
-    apply' :: Definition
-    apply' = mkApply 2 apply
+    ps <- getParams
+    addDefinitions
+      [cunit|
+         __kernel void zipWith (const $ty:shape_out shOut,
+                                const $ty:shape_inB shInB,
+                                const $ty:shape_inA shInA,
+                                $params:ps) {
+           const $ty:ix shapeSize = $id:(size dimOut)(shOut);
+           const $ty:ix gridSize  = get_global_size(0);
 
-    skel :: [Definition]
-    skel = [cunit|
-              __kernel void zipWith (const $ty:sh_out_type shOut,
-                                     const $ty:sh_inB_type shInB,
-                                     const $ty:sh_inA_type shInA,
-                                     $params:(out_params ++ in_paramsB ++ in_paramsA)) {
-                const $ty:ixType shapeSize = $id:(size dimOut)(shOut);
-                const $ty:ixType gridSize  = get_global_size(0);
+           for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+             $ty:ix iA = $id:(toIndex dimInB)(shInB, $id:(fromIndex dimInB)(shOut, ix));
+             $ty:ix iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
 
-                for ($ty:ixType ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
-                  $ty:ixType iA = $id:(toIndex dimInB)(shInB, $id:(fromIndex dimInB)(shOut, ix));
-                  $ty:ixType iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
-
-                  $ty:(typename "TyInB") valB = $exp:(callGetB "iB") ;
-                  $ty:(typename "TyInA") valA = $exp:(callGetA "iA") ;
-                  $ty:outType new = apply(valB, valA) ;
-                  $exp:(callSet "ix" "new") ;
-                }
-              }
-           |]
+             $ty:(typename "TyInB") valB = $exp:(getB "iB") ;
+             $ty:(typename "TyInA") valA = $exp:(getA "iA") ;
+             $ty:outType new = apply(valB, valA) ;
+             $exp:(set "ix" "new") ;
+           }
+         }
+      |]
 
 
 -- -- Stencil
@@ -273,17 +268,41 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
 -- -- Permutation
 -- -- -----------
 
--- mkPermute :: [CType] -> Int -> Int -> [CExpr] -> [CExpr] -> CUTranslSkel
--- mkPermute ty dimOut dimIn0 combinefn indexfn = CUTranslSkel code [] skel
---   where
---     skel = "permute.inl"
---     code = CTranslUnit
---             ( mkTupleTypeAsc 2 ty ++
---             [ mkDim "DimOut" dimOut
---             , mkDim "DimIn0" dimIn0
---             , mkProject Forward indexfn
---             , mkApply 2 combinefn ])
---             (mkNodeInfo (initPos skel) (Name 0))
+mkPermute :: [C.Type] -> Int -> Int -> C.Exp -> C.Exp -> CUTranslSkel
+mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
+    (Set set : Get get : _) <- mkTupleTypeAsc 2 ty
+    shape_out <- mkShape "DimOut" dimOut
+    shape_inA <- mkShape "DimInA" dimInA
+
+    mkApply 2 combinefn
+    mkProject Forward indexfn
+
+    ps <- getParams
+    addDefinitions
+      [cunit|
+         __kernel void permute (const $ty:shape_out shOut,
+                                const $ty:shape_inA shInA,
+                                $params:ps) {
+             const $ty:ix shapeSize = $id:(size dimInA)(shIn0);
+             const $ty:ix gridSize  = get_global_size(0);
+
+             for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+                 $ty:shape_inA src = $id:(fromIndex dimInA)(shIn0, ix);
+                 $ty:shape_out dst = project(src);
+
+                 if (!ignore(dst)) {
+                     $ty:ix j = $id:(toIndex dimOut)(shOut, dst);
+
+                     $ty:(typename "TyOut") valB = $exp:(get "j") ;
+                     $ty:(typename "TyInA") valA = $exp:(get "ix") ;
+                     $ty:outType new = apply(valB, valA) ;
+                     $exp:(set "j" "new") ;
+
+                     //set(d_out, j, apply(get0(d_in0, ix), get0(d_out, j)));
+                 }
+             }
+         }
+      |]
 
 -- mkBackpermute :: [CType] -> Int -> Int -> [CExpr] -> CUTranslSkel
 -- mkBackpermute ty dimOut dimIn0 indexFn = CUTranslSkel code [] skel
@@ -316,6 +335,29 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
 -- mkReplicate :: [CType] -> Int -> Int -> [CExpr] -> CUTranslSkel
 -- mkReplicate ty dimSl dimOut slix = CUTranslSkel code [] skel
 --   where
+--     (outputdefs, out_params, Set callSet) = mkOutputTuple ty
+--     (slice_type, slice_def) = mkShape "Slice" dimSl
+--     (slice_dim_type, slice_dim_def) = mkShape "SliceDim" dimOut
+
+--     skel :: [Definition]
+--     skel = [cunit|
+--               __kernel void replicate (
+--                 const $ty:slice_type     slice,
+--                 const $ty:slice_dim_type sliceDim,
+--                 __global TyOut           *d_out,
+--                 __global const TyIn0     *d_in0) {
+
+--                 const Ix shapeSize = sizeSliceDim(sliceDim);
+--                 const Ix gridSize  = get_global_size(0);
+
+--                 for (Ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+--                   SliceDim dst = fromIndexSliceDim(sliceDim, ix);
+--                   Slice    src = sliceIndex(dst);
+--                   set(d_out, ix, get0(d_in0, toIndexSlice(slice, src)));
+--                 }
+--               }
+--            |]
+
 --     skel = "replicate.inl"
 --     code = CTranslUnit
 --             ( mkTupleTypeAsc 1 ty ++

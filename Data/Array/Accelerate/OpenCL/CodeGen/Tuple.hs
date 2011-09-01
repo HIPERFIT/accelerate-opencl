@@ -11,8 +11,9 @@
 
 module Data.Array.Accelerate.OpenCL.CodeGen.Tuple
   (
-    mkInputTuple, mkOutputTuple, Accessor (..)
-    --    mkTupleType, mkTupleTypeAsc, mkTuplePartition
+    mkInputTuple, mkOutputTuple, Accessor (..),
+    mkTupleTypeAsc
+    --    mkTupleType, mkTuplePartition
   )
   where
 
@@ -25,37 +26,51 @@ import qualified Language.C.Syntax
 import qualified Data.Loc
 import qualified Data.Symbol
 
+import Data.Array.Accelerate.OpenCL.CodeGen.Monad
+import Control.Monad
+
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
 
 data Accessor = Get (String -> Exp)
               | Set (String -> String -> Exp)
 
-mkInputTuple :: String -> [Type]-> ([Definition], [Param], Accessor)
+mkInputTuple :: String -> [Type]-> CGM Accessor
 mkInputTuple subscript types = mkTupleType (Just subscript) types
 
-mkOutputTuple :: [Type]-> ([Definition], [Param], Accessor)
+mkOutputTuple :: [Type]-> CGM Accessor
 mkOutputTuple types = mkTupleType Nothing types
 
-mkTupleType :: Maybe String -> [Type] -> ([Definition], [Param], Accessor)
-mkTupleType subscript types = (typedefs ++ struct ++ [accessor], params, accessorCall)
+mkTupleType :: Maybe String -> [Type] -> CGM Accessor
+mkTupleType subscript types = do
+  let n = length types
+      tuple_name = maybe "TyOut" ("TyIn" ++) subscript
+      volatile = isNothing subscript
+      tynames
+        | n > 1     = take n [tuple_name ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
+        | otherwise = [tuple_name]
+
+  addDefinitions $ zipWith (mkTypedef volatile) tynames types
+  accessorCall <- mkParameterList subscript n tynames
+  (maybe mkSet mkGet subscript) n tynames
+  when (n > 1) $ addDefinition (mkStruct tuple_name volatile types)
+  return accessorCall
+
+mkTupleTypeAsc :: Int -> [Type] -> CGM [Accessor]
+mkTupleTypeAsc n types = do
+  accessorOut <- mkOutputTuple types
+  accessorsIn <- mkInputTuples (n-1)
+  return $ accessorOut : accessorsIn
   where
-    n = length types
-    tuple_name = maybe "TyOut" ("TyIn" ++) subscript
-    volatile = isNothing subscript
-    tynames
-      | n > 1     = take n [tuple_name ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
-      | otherwise = [tuple_name]
+    mkInputTuples 0 = return []
+    mkInputTuples n = do
+      as <- mkInputTuples (n-1)
+      a <- mkInputTuple (show $ n-1) types
+      return $ a : as
 
-    -- typedef float TyInA_0; typedef float TyInA_1; ...
-    typedefs = zipWith (mkTypedef volatile) tynames types
-    (params, accessorCall) = mkParameterList subscript n tynames
-    accessor = (maybe mkSet mkGet subscript) n tynames params
-    struct
-      | n > 1     = [mkStruct tuple_name volatile types]
-      | otherwise = []
-
-mkParameterList :: Maybe String -> Int -> [String] -> ([Param], Accessor)
-mkParameterList subscript n tynames = (params $ zip types' param_names, accessorCall)
+mkParameterList :: Maybe String -> Int -> [String] -> CGM Accessor
+mkParameterList subscript n tynames = do
+  addParams $ params (zip types' param_names)
+  return accessorCall
   where
     param_prefix = maybe "out" ("in" ++) subscript
     param_names
@@ -69,8 +84,9 @@ mkParameterList subscript n tynames = (params $ zip types' param_names, accessor
         Nothing -> Set $ \idx val -> [cexp|set($id:idx, $id:val, $args:args)|]
         Just x  -> Get $ \idx -> [cexp|$id:("get" ++ x)($id:idx, $args:args)|]
 
-mkGet :: String -> Int -> [String] -> [Param] -> (Definition)
-mkGet prj n tynames params =
+mkGet :: String -> Int -> [String] -> CGM ()
+mkGet prj n tynames = do
+  params <- getParams
   let name = "get" ++ prj
       param_name = "in" ++ prj
       returnType = typename $ "TyIn" ++ prj
@@ -79,23 +95,27 @@ mkGet prj n tynames params =
       assignments
         | n > 1     = zipWith assign [0..] tynames
         | otherwise = [ [cstm|val = $id:param_name [idx];|] ]
-  in [cedecl|
-       inline $ty:returnType $id:name(const $ty:ixType idx, $params:params) {
+
+  addDefinition
+     [cedecl|
+       inline $ty:returnType $id:name(const $ty:ix idx, $params:params) {
          $ty:returnType val;
          $stms:assignments
          return val;
        }
      |]
 
-mkSet :: Int -> [String] -> [Param] -> Definition
-mkSet n tynames params =
+mkSet :: Int -> [String] -> CGM ()
+mkSet n tynames = do
+  params <- getParams
   let assign i name = let field = 'a' : show i
                       in [cstm|$id:name [idx] = val.$id:field;|]
       assignments
         | n > 1     = zipWith assign [0..] tynames
         | otherwise = [ [cstm|out[idx] = val;|] ]
-  in [cedecl|
-       inline void set(const $ty:ixType idx, const $ty:outType val, $params:params) {
+  addDefinition
+     [cedecl|
+       inline void set(const $ty:ix idx, const $ty:outType val, $params:params) {
          $stms:assignments
        }
      |]
