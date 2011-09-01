@@ -50,7 +50,7 @@ import System.Directory
 --import System.IO
 --import System.Exit                                      (ExitCode(..))
 --import System.Posix.Types                               (ProcessID)
---import System.Posix.Process
+import System.Posix.Process
 --import Text.PrettyPrint
 --import Foreign.Storable
 import qualified Data.HashTable                         as Hash
@@ -573,63 +573,33 @@ link :: KernelTable -> AccKey -> IO OpenCL.Program
 link table key =
   let intErr = INTERNAL_ERROR(error) "link" "missing kernel entry"
   in do
-    (KernelEntry cufile prog) <- fromMaybe intErr `fmap` Hash.lookup table key
-    return prog
---     case stat of
---       Right mdl -> return mdl
---       Left  pid -> do
---         -- wait for compiler to finish and load binary object
---         --
---         waitFor pid
---         mdl <- CUDA.loadFile (replaceExtension cufile ".cubin")
-
--- -- #ifndef ACCELERATE_CUDA_PERSISTENT_CACHE
--- --         -- remove build products
--- --         --
--- --         removeFile      cufile
--- --         removeFile      (replaceExtension cufile ".cubin")
--- --         removeDirectory (dropFileName cufile)
--- --           `catch` \_ -> return ()       -- directory not empty
--- -- #endif
-
---         -- update hash table
---         --
---         Hash.insert table key (KernelEntry cufile (Right mdl))
---         return mdl
-
+    (KernelEntry cufile stat) <- fromMaybe intErr `fmap` Hash.lookup table key
+    case stat of
+      Right mdl -> return mdl
+      Left  mvar -> do
+        -- wait for compiler to finish and load binary object
+        --
+        mdl <- takeMVar mvar
+        Hash.insert table key (KernelEntry cufile (Right mdl))
+        return mdl
 
 -- Generate and compile code for a single open array expression
 --
 compile :: KernelTable -> AccKey -> OpenAcc aenv a -> [AccBinding aenv] -> CIO ()
 compile table key acc fvar = do
-  -- dir     <- outputDir
-  -- nvcc    <- fromMaybe (error "nvcc: command not found") <$> liftIO (findExecutable "nvcc")
-  -- cufile  <- outputName acc (dir </> "dragon.cu")        -- rawr!
-  -- flags   <- compileFlags cufile
-  let src = show $ codeGenAcc acc fvar
-  liftIO $ putStrLn src
+  mvar <- liftIO newEmptyMVar
   ctx <- getM cl_context
-  prog <- liftIO $ OpenCL.createProgram ctx src
   devices <- getM cl_devices
-  liftIO $ OpenCL.buildProgram prog (map fst devices) =<< compileFlags
-  liftIO $ Hash.insert table key (KernelEntry "kernelName field NOT USED CURRENTLY" prog)
 
-  -- pid     <- liftIO $ do
-  --              writeCode cufile (codeGenAcc acc fvar)
-  --              forkProcess $ executeFile nvcc False flags Nothing
-  -- --
-  -- liftIO $ Hash.insert table key (KernelEntry cufile (Left pid))
+  -- Compile in another thread
+  _ <- liftIO . forkProcess $ do
+         prog <- OpenCL.createProgram ctx (show $ codeGenAcc acc fvar)
+         OpenCL.buildProgram prog (map fst devices) =<< compileFlags
+         putMVar mvar prog
 
-
-
--- -- Wait for the compilation process to finish
--- --
--- waitFor :: ProcessID -> IO ()
--- waitFor pid = do
---   status <- getProcessStatus True True pid
---   case status of
---     Just (Exited ExitSuccess) -> return ()
---     _                         -> error  $ "nvcc (" ++ show pid ++ ") terminated abnormally"
+  liftIO $ Hash.insert table key
+             (KernelEntry "compile: kernelName field NOT USED CURRENTLY"
+                          (Left mvar))
 
 compileFlags :: IO String
 compileFlags = do
@@ -639,66 +609,6 @@ compileFlags = do
             ++ "-Werror"
             ++ "-cl-std=CL1.1"
 
-
--- compileFlags :: String
--- compileFlags =
---      " -I/home/dybber/lib/ati-stream-sdk-v2.3-lnx64/include/" -- TODO is this necessary?!
---   ++ "-Werror"
---   ++ "-cl-std=CL1.1"
-
-
--- -- Determine the appropriate command line flags to pass to the compiler process.
--- -- This is dependent on the host architecture and device capabilities.
--- --
--- compileFlags :: FilePath -> CIO [String]
--- compileFlags cufile =
---   let machine = case sizeOf (undefined :: Int) of
---                   4 -> "-m32"
---                   8 -> "-m64"
---                   _ -> error "huh? non 32-bit or 64-bit architecture"
---   in do
---   arch <- CUDA.computeCapability <$> getM deviceProps
---   ddir <- liftIO getDataDir
---   return [ "-I", ddir </> "cubits"
---          , "-O2", "--compiler-options", "-fno-strict-aliasing"
---          , "-arch=sm_" ++ show (round (arch * 10) :: Int)
---          , "-DUNIX"
---          , "-cubin"
---          , "-o", cufile `replaceExtension` "cubin"
---          , machine
---          , cufile ]
-
-
--- -- Return a unique output filename for the generated CUDA code
--- --
--- outputName :: OpenAcc aenv a -> FilePath -> CIO FilePath
--- outputName acc cufile = do
---   n <- freshVar
---   x <- liftIO $ doesFileExist (filename n)
---   if x then outputName acc cufile
---        else return (filename n)
---   where
---     (base,suffix) = splitExtension cufile
---     filename n    = base ++ pad (show n) <.> suffix
---     pad s         = replicate (4-length s) '0' ++ s
---     freshVar      = getM unique <* modM unique (+1)
-
-
--- -- Return the output directory for compilation by-products, creating if it does
--- -- not exist.
--- --
--- outputDir :: CIO FilePath
--- outputDir = liftIO $ do
--- #ifdef ACCELERATE_CUDA_PERSISTENT_CACHE
---   tmp <- getDataDir
---   let dir = tmp </> "cache"
--- #else
---   tmp <- getTemporaryDirectory
---   pid <- getProcessID
---   let dir = tmp </> "accelerate-cuda-" ++ show pid
--- #endif
---   createDirectoryIfMissing True dir
---   canonicalizePath dir
 
 
 -- Pretty printing

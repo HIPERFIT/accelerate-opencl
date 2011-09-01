@@ -48,7 +48,8 @@ Library
                       , transformers         == 0.2.*
                       , directory
                       , filepath
-                      , ghc-binary
+                      , binary
+                      , unix            == 2.4.*
 
   Exposed-modules:      Data.Array.Accelerate.OpenCL
 

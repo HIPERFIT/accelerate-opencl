@@ -41,7 +41,8 @@ import Data.Record.Label
 import Control.Applicative
 import Control.Monad
 import Control.Monad.State.Strict                       (StateT(..))
---import System.Posix.Types                               (ProcessID)
+import System.Posix.Types                               (ProcessID)
+import Control.Concurrent.MVar
 --import System.Mem.Weak
 import System.IO.Unsafe
 import Foreign.Ptr
@@ -73,7 +74,7 @@ type KernelTable = Hash.HashTable AccKey KernelEntry
 data KernelEntry = KernelEntry
   {
     _kernelName   :: FilePath,
-    _kernelStatus :: Program --Either ProcessID Program
+    _kernelStatus :: Either (MVar Program) Program
   }
 
 -- Associations between host- and device-side arrays, with reference counting.
@@ -179,9 +180,9 @@ initialise = do
   (platform, devices) <- selectBestPlatform
   context <- createContext devices [ContextPlatform platform]
   queues <- mapM (flip (createCommandQueue context) [QueueOutOfOrderExecModeEnable]) devices
-  knl <- Hash.new (==) hashAccKey
+  (knl, u) <- loadIndexFile
   return $ OpenCLState
-    { _unique = 0
+    { _unique = u
     , _cl_platform = platform
     , _cl_devices = zip devices queues
     , _cl_context = context
@@ -204,7 +205,7 @@ runOpenCL acc = readIORef onta >>= flip runOpenCLWith acc
 runOpenCLWith :: OpenCLState -> CIO a -> IO (a, OpenCLState)
 runOpenCLWith state acc = do
   (a,s) <- runStateT acc state
---  saveIndexFile s
+  saveIndexFile s
   writeIORef onta =<< sanitise s
   return (a,s)
   where
