@@ -57,6 +57,7 @@ Library
                         Data.Array.Accelerate.OpenCL.CodeGen.Util
                         Data.Array.Accelerate.OpenCL.CodeGen.Data
                         Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
+                        Data.Array.Accelerate.OpenCL.CodeGen.Monad
                         Data.Array.Accelerate.OpenCL.CodeGen.Tuple
                         Data.Array.Accelerate.OpenCL.Analysis.Hash
                         Data.Array.Accelerate.OpenCL.Analysis.Device
