@@ -46,9 +46,10 @@ mkSliceIndex :: Exp -> Definition
 mkSliceIndex =
   mkDeviceFun "sliceIndex" (typename "SliceDim") $ params [(typename "Slice","sl"), (typename "CoSlice","co")]
 
-mkSliceReplicate :: Exp -> Definition
-mkSliceReplicate =
-  mkDeviceFun "sliceIndex" (typename "Slice") $ [param (typename "SliceDim") "dim"]
+mkSliceReplicate :: Exp -> CGM ()
+mkSliceReplicate exp =
+  addDefinition $
+    (mkDeviceFun "sliceIndex" (typename "Slice") $ [param (typename "SliceDim") "dim"]) exp
 
 
 -- Helper functions
