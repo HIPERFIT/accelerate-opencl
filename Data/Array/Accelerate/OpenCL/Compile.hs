@@ -41,6 +41,7 @@ import Prelude                                          hiding (exp)
 --import Control.Applicative                              hiding (Const)
 import Control.Monad.Trans
 import Control.Monad
+import Control.Concurrent                               (forkIO)
 import Control.Concurrent.MVar
 import Data.Maybe
 import Data.Record.Label
@@ -50,7 +51,7 @@ import System.Directory
 --import System.IO
 --import System.Exit                                      (ExitCode(..))
 --import System.Posix.Types                               (ProcessID)
-import System.Posix.Process
+--import System.Posix.Process
 --import Text.PrettyPrint
 --import Foreign.Storable
 import qualified Data.HashTable                         as Hash
@@ -592,8 +593,10 @@ compile table key acc fvar = do
   devices <- getM cl_devices
 
   -- Compile in another thread
-  _ <- liftIO . forkProcess $ do
-         prog <- OpenCL.createProgram ctx (show $ codeGenAcc acc fvar)
+  _ <- liftIO . forkIO $ do
+         let p = (show $ codeGenAcc acc fvar)
+         putStrLn p
+         prog <- OpenCL.createProgram ctx p
          OpenCL.buildProgram prog (map fst devices) =<< compileFlags
          putMVar mvar prog
 
