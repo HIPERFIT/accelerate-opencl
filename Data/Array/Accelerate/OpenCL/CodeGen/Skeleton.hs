@@ -54,12 +54,12 @@ mkGenerate (tyOut, dimOut) apply = runCGM $ do
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void permute (const $ty:shape_out shOut,
+         __kernel void generate (const $ty:shape_out shOut,
                                 $params:ps) {
-             const $ty:ix n = $id:(size dimOut)(shInA);
+             const $ty:ix n = $id:(size dimOut)(shOut);
              const $ty:ix gridSize  = get_global_size(0);
 
-             for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+             for ($ty:ix ix = get_global_id(0); ix < n; ix += gridSize) {
                  $ty:outType val = apply($id:(fromIndex dimOut)(shOut, ix));
                  set(ix, val, $args:d_out);
              }
@@ -323,7 +323,7 @@ mkBackpermute ty dimOut dimInA indexFn = runCGM $ do
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void permute (const $ty:shape_out shOut,
+         __kernel void backpermute (const $ty:shape_out shOut,
                                 const $ty:shape_inA shInA,
                                 $params:ps) {
              const $ty:ix shapeSize = $id:(size dimInA)(shInA);
@@ -366,7 +366,7 @@ mkReplicate ty dimSl dimOut slix = runCGM $ do
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void permute (const $ty:slice shOut,
+         __kernel void replicate (const $ty:slice shOut,
                                 const $ty:slice_dim shInA,
                                 $params:ps) {
              const $ty:ix shapeSize = $id:(size dimOut)(sliceDim);

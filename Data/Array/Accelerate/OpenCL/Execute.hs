@@ -270,7 +270,7 @@ generateOp :: (Shape dim, Elt e)
            -> CIO (Array dim e)
 generateOp c kernel bindings acc aenv sh = do
   res@(Array s out) <- newArray c sh
-  execute kernel bindings acc aenv (Sugar.size sh) (((),out),convertIx s)
+  execute kernel bindings acc aenv (Sugar.size sh) (((),convertIx s),out)
   return res
 
 
