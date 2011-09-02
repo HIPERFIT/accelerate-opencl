@@ -108,14 +108,10 @@ mkTypedef volatile tyname typ | volatile = let typ' = mkVolatile typ
                                            in [cedecl|typedef $ty:typ' $id:tyname;|]
                               | otherwise = [cedecl|typedef $ty:typ $id:tyname;|]
 
-mkShape :: String -> Int -> CGM Type
-mkShape name dim = do
-  addDefinition typedef
-  return $ typename name
- where
-   typedef | dim == 0  = [cedecl| typedef void* $id:name; |]
-           | dim == 1  = [cedecl| typedef $ty:ix $id:name; |]
-           | otherwise = mkStruct name False (replicate dim ix)
+mkShape :: String -> Int -> CGM ()
+mkShape name 0 = addDefinition [cedecl| typedef void* $id:name; |]
+mkShape name 1 = addDefinition [cedecl| typedef $ty:ix $id:name; |]
+mkShape name dim = addDefinition $ mkStruct name False (replicate dim ix)
 
 toIndex :: Int -> String
 toIndex dim = "toIndexDIM" ++ show dim

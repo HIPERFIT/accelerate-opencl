@@ -46,21 +46,21 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Monad
 mkGenerate :: ([C.Type],Int) -> C.Exp -> CUTranslSkel
 mkGenerate (tyOut, dimOut) apply = runCGM $ do
     d_out <- mkOutputTuple tyOut
-    shape_out <- mkShape "DimOut" dimOut
-    _ <- mkShape "TyInA" dimOut
+    mkShape "DimOut" dimOut
+    mkShape "TyInA" dimOut
 
     mkApply 1 apply
 
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void generate (const $ty:shape_out shOut,
+         __kernel void generate (const typename DimOut shOut,
                                 $params:ps) {
-             const $ty:ix n = $id:(size dimOut)(shOut);
-             const $ty:ix gridSize  = get_global_size(0);
+             const typename Ix n = $id:(size dimOut)(shOut);
+             const typename Ix gridSize  = get_global_size(0);
 
-             for ($ty:ix ix = get_global_id(0); ix < n; ix += gridSize) {
-                 $ty:outType val = apply($id:(fromIndex dimOut)(shOut, ix));
+             for (typename Ix ix = get_global_id(0); ix < n; ix += gridSize) {
+                 typename TyOut val = apply($id:(fromIndex dimOut)(shOut, ix));
                  set(ix, val, $args:d_out);
              }
          }
@@ -158,25 +158,25 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
     d_inB <- mkInputTuple "B" tyInB
     mkApply 2 apply
 
-    shape_out <- mkShape "DimOut" dimOut
-    shape_inB <- mkShape "DimInB" dimInB
-    shape_inA <- mkShape "DimInA" dimInA
+    mkShape "DimOut" dimOut
+    mkShape "DimInB" dimInB
+    mkShape "DimInA" dimInA
 
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void zipWith (const $ty:shape_out shOut,
-                                const $ty:shape_inB shInB,
-                                const $ty:shape_inA shInA,
+         __kernel void zipWith (const typename DimOut shOut,
+                                const typename DimInB shInB,
+                                const typename DimInA shInA,
                                 $params:ps) {
-           const $ty:ix shapeSize = $id:(size dimOut)(shOut);
-           const $ty:ix gridSize  = get_global_size(0);
+           const typename Ix shapeSize = $id:(size dimOut)(shOut);
+           const typename Ix gridSize  = get_global_size(0);
 
-           for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
-             $ty:ix iA = $id:(toIndex dimInB)(shInB, $id:(fromIndex dimInB)(shOut, ix));
-             $ty:ix iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
+           for (typename Ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+             typename Ix iA = $id:(toIndex dimInB)(shInB, $id:(fromIndex dimInB)(shOut, ix));
+             typename Ix iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
 
-             $ty:outType val = apply(getB(iB, $args:d_inB), getA(iA, $args:d_inA)) ;
+             typename TyOut val = apply(getB(iB, $args:d_inB), getA(iA, $args:d_inA)) ;
              set(ix, val, $args:d_out) ;
            }
          }
@@ -281,8 +281,8 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
 mkPermute :: [C.Type] -> Int -> Int -> C.Exp -> C.Exp -> CUTranslSkel
 mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
     (d_out, d_inA : _) <- mkTupleTypeAsc 2 ty
-    shape_out <- mkShape "DimOut" dimOut
-    shape_inA <- mkShape "DimInA" dimInA
+    mkShape "DimOut" dimOut
+    mkShape "DimInA" dimInA
 
     mkApply 2 combinefn
     mkProject Forward indexfn
@@ -290,21 +290,21 @@ mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void permute (const $ty:shape_out shOut,
-                                const $ty:shape_inA shInA,
+         __kernel void permute (const typename DimOut shOut,
+                                const typename DimInA shInA,
                                 $params:ps) {
-             const $ty:ix shapeSize = $id:(size dimInA)(shInA);
-             const $ty:ix gridSize  = get_global_size(0);
+             const typename Ix shapeSize = $id:(size dimInA)(shInA);
+             const typename Ix gridSize  = get_global_size(0);
 
-             for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
-                 $ty:shape_inA src = $id:(fromIndex dimInA)(shIn0, ix);
-                 $ty:shape_out dst = project(src);
+             for (typename Ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+                 typename DimInA src = $id:(fromIndex dimInA)(shIn0, ix);
+                 typename DimOut dst = project(src);
 
                  if (!ignore(dst)) {
-                     $ty:ix j = $id:(toIndex dimOut)(shOut, dst);
+                     typename Ix j = $id:(toIndex dimOut)(shOut, dst);
 
-                     $ty:outType val = apply(getA(j, $args:d_out),
-                                             getA(ix, $args:d_inA)) ;
+                     typename TyOut val = apply(getA(j, $args:d_out),
+                                                getA(ix, $args:d_inA)) ;
                      set(j, val, $args:d_out) ;
                  }
              }
@@ -315,25 +315,25 @@ mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
 mkBackpermute :: [C.Type] -> Int -> Int -> C.Exp -> CUTranslSkel
 mkBackpermute ty dimOut dimInA indexFn = runCGM $ do
     (d_out, d_inA : _) <- mkTupleTypeAsc 1 ty
-    shape_out <- mkShape "DimOut" dimOut
-    shape_inA <- mkShape "DimInA" dimInA
+    mkShape "DimOut" dimOut
+    mkShape "DimInA" dimInA
 
     mkProject Backward indexFn
 
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void backpermute (const $ty:shape_out shOut,
-                                const $ty:shape_inA shInA,
-                                $params:ps) {
-             const $ty:ix shapeSize = $id:(size dimInA)(shInA);
-             const $ty:ix gridSize  = get_global_size(0);
+         __kernel void backpermute (const typename DimOut shOut,
+                                    const typename DimInA shInA,
+                                    $params:ps) {
+             const typename Ix shapeSize = $id:(size dimInA)(shInA);
+             const typename Ix gridSize  = get_global_size(0);
 
-             for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
-                 $ty:shape_out src = $id:(fromIndex dimOut)(shOut, ix);
-                 $ty:shape_inA src = project(dst);
+             for (typename Ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+                 typename DimOut dst = $id:(fromIndex dimOut)(shOut, ix);
+                 typename DimInA src = project(dst);
 
-                 $ty:ix j = $id:(toIndex dimInA)(shInA, dst);
+                 typename Ix j = $id:(toIndex dimInA)(shInA, dst);
                  set(ix, getA(j, $args:d_inA), $args:d_out) ;
              }
          }
@@ -358,25 +358,25 @@ mkBackpermute ty dimOut dimInA indexFn = runCGM $ do
 mkReplicate :: [C.Type] -> Int -> Int -> C.Exp -> CUTranslSkel
 mkReplicate ty dimSl dimOut slix = runCGM $ do
     (d_out, d_inA : _) <- mkTupleTypeAsc 1 ty
-    slice <- mkShape "Slice" dimSl
-    slice_dim <- mkShape "SliceDim" dimOut
+    mkShape "Slice" dimSl
+    mkShape "SliceDim" dimOut
 
     mkSliceReplicate slix
 
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void replicate (const $ty:slice shOut,
-                                const $ty:slice_dim shInA,
-                                $params:ps) {
-             const $ty:ix shapeSize = $id:(size dimOut)(sliceDim);
-             const $ty:ix gridSize  = get_global_size(0);
+         __kernel void replicate (const typename Slice shOut,
+                                  const typename SliceDim shInA,
+                                  $params:ps) {
+             const typename Ix shapeSize = $id:(size dimOut)(sliceDim);
+             const typename Ix gridSize  = get_global_size(0);
 
-             for ($ty:ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
-                 $ty:slice_dim dst = $id:(fromIndex dimOut)(sliceDim, ix);
-                 $ty:slice src = sliceIndex(dst);
+             for (typename Ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+                 typename SliceDim dst = $id:(fromIndex dimOut)(sliceDim, ix);
+                 typename Slice src = sliceIndex(dst);
 
-                 $ty:ix j = $id:(toIndex dimSl)(slice, src);
+                 typename Ix j = $id:(toIndex dimSl)(slice, src);
                  set(ix, getA(j, $args:d_inA), $args:d_out) ;
              }
          }

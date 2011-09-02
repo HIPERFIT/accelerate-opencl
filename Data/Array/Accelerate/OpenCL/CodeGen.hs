@@ -37,7 +37,7 @@ import Data.Array.Accelerate.Pretty ()
 import Data.Array.Accelerate.Analysis.Type
 import Data.Array.Accelerate.Analysis.Shape
 --import Data.Array.Accelerate.Analysis.Stencil
---import Data.Array.Accelerate.Array.Representation
+import Data.Array.Accelerate.Array.Representation
 import qualified Data.Array.Accelerate.Array.Sugar              as Sugar
 import qualified Foreign.Storable                               as F
 
@@ -114,16 +114,16 @@ codeGenAcc acc vars =
         ZipWith f a b     -> mkZipWith (codeGenAccTypeDim acc) (codeGenAccTypeDim a) (codeGenAccTypeDim b) (codeGenFun f)
         Permute f _ g a   -> mkPermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f) (codeGenFun g)
         Backpermute _ f a -> mkBackpermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f)
-        -- Replicate sl _ a  ->
-        --   let dimSl  = accDim a
-        --       dimOut = accDim acc
-        --       --
-        --       extend :: SliceIndex slix sl co dim -> Int -> [CExpr]
-        --       extend (SliceNil)            _ = []
-        --       extend (SliceAll   sliceIdx) n = mkPrj dimOut "dim" n : extend sliceIdx (n+1)
-        --       extend (SliceFixed sliceIdx) n = extend sliceIdx (n+1)
-        --   in
-        --   mkReplicate (codeGenAccType a) dimSl dimOut . reverse $ extend sl 0
+        Replicate sl _ a  ->
+          let dimSl  = accDim a
+              dimOut = accDim acc
+              --
+              extend :: SliceIndex slix sl co dim -> Int -> [C.Exp]
+              extend (SliceNil)            _ = []
+              extend (SliceAll   sliceIdx) n = mkPrj dimOut "dim" n : extend sliceIdx (n+1)
+              extend (SliceFixed sliceIdx) n = extend sliceIdx (n+1)
+          in
+          mkReplicate (codeGenAccType a) dimSl dimOut . seqexps . reverse $ extend sl 0
 
 --         -- Index sl a slix   ->
 --         --   let dimCo  = length (codeGenExpType slix)
