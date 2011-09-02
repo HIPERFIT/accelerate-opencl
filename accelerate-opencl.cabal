@@ -91,3 +91,8 @@ Library
 
   if flag(internal-checks)
     cpp-options:        -DACCELERATE_INTERNAL_CHECKS
+
+
+source-repository head
+  type:                 git
+  location:             https://github.com/HIPERFIT/accelerate-opencl.git
