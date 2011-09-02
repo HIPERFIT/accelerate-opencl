@@ -52,9 +52,9 @@ mkTupleType subscript types = do
         | otherwise = [tuple_name]
 
   addDefinitions $ zipWith (mkTypedef volatile) tynames types
-  (args,ps) <- mkParameterList subscript n tynames
-  (maybe mkSet mkGet subscript) n tynames ps
   when (n > 1) $ addDefinition (mkStruct tuple_name volatile types)
+  (args,ps) <- mkParameterList subscript n tynames
+  (maybe mkSet mkGet subscript) n ps
   return args
 
 mkTupleTypeAsc :: Int -> [Type] -> CGM (Arguments, [Arguments])
@@ -87,8 +87,8 @@ mkParameterList subscript n tynames = do
     --     Nothing -> Set $ \idx val -> [cexp|set($id:idx, $id:val, $args:args)|]
     --     Just x  -> Get $ \idx -> [cexp|$id:("get" ++ x)($id:idx, $args:args)|]
 
-mkGet :: String -> Int -> [String] -> [Param] -> CGM ()
-mkGet prj n tynames params = do
+mkGet :: String -> Int -> [Param] -> CGM ()
+mkGet prj n params = do
   addDefinition
      [cedecl|
        inline $ty:returnType $id:name($ty:ix idx, $params:params) {
@@ -98,18 +98,18 @@ mkGet prj n tynames params = do
        }
      |]
    where
+     parnames = ["in" ++ prj ++ "_" ++ show i | i <- [0..]]
      name = "get" ++ prj
-     param_name = "in" ++ prj
      returnType = typename $ "TyIn" ++ prj
      assign i name = let field = 'a' : show i
                      in [cstm|val.$id:field = $id:name [idx];|]
      assignments
-      | n > 1     = zipWith assign [0..] tynames
-      | otherwise = [ [cstm|val = $id:param_name [idx];|] ]
+      | n > 1     = take n $ zipWith assign [0..] parnames
+      | otherwise = [ [cstm|val = $id:("in" ++ prj) [idx];|] ]
 
 
-mkSet :: Int -> [String] -> [Param] -> CGM ()
-mkSet n tynames params =
+mkSet :: Int -> [Param] -> CGM ()
+mkSet n params =
   addDefinition
      [cedecl|
        inline void set($ty:ix idx, const $ty:outType val, $params:params) {
@@ -117,14 +117,14 @@ mkSet n tynames params =
        }
      |]
    where
+     parnames = ["out" ++ "_" ++ show i | i <- [0..]]
      assign i name = let field = 'a' : show i
                      in [cstm|$id:name [idx] = val.$id:field;|]
      assignments
-      | n > 1     = zipWith assign [0..] tynames
+      | n > 1     = take n $ zipWith assign [0..] parnames
       | otherwise = [ [cstm|out[idx] = val;|] ]
 
 -- TODO partition
--- TODO understand difference between mkTupleType and mkTupleTypeAsc
 
 -- -- A variant of tuple generation for associative array computations, generating
 -- -- base get and set functions, and the given number of type synonyms.
