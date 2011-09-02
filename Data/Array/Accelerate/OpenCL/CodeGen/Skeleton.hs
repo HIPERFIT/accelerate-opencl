@@ -137,13 +137,13 @@ mkMap tyOut tyIn_A apply = runCGM $ do
   ps <- getParams
   addDefinitions
     [cunit|
-       __kernel void map (const $ty:ix shape, $params:ps) {
-         const $ty:ix gridSize = get_global_size(0);
+       __kernel void map (const typename Ix shape, $params:ps) {
+         const typename Ix gridSize = get_global_size(0);
 
-         for($ty:ix idx = get_global_id(0); idx < shape; idx += gridSize) {
-           $ty:(typename "TyInA") val = getA(idx, $args:d_inA) ;
-           $ty:outType new = apply(val) ;
-           set(idx, new, $args:d_out) ;
+         for(typename Ix idx = get_global_id(0); idx < shape; idx += gridSize) {
+           typename TyInA val = getA(idx, $args:d_inA);
+           typename TyOut new = apply(val);
+           set(idx, new, $args:d_out);
          }
        }
     |]

@@ -633,7 +633,7 @@ bindAcc mdl aenv (ArrayVar idx) =
   let idx'        = show $ idxToInt idx
       Array sh ad = prj idx aenv
       --
-      bindDim = liftIO $ print "bindLifed is not implemented in OpenCL backend"
+      bindDim = liftIO $ print "bindLifted is not implemented in OpenCL backend"
         -- CUDA.getPtr mdl ("sh" ++ idx') >>=
         -- OpenCL.pokeListArray (convertIx sh) . fst
       --

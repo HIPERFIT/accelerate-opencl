@@ -25,6 +25,7 @@ import qualified Language.C as C
 import qualified Data.Loc
 import qualified Data.Symbol
 import qualified Language.C.Syntax
+import qualified Data.Loc as Loc
 import Language.C.Quote.C
 
 import Text.PrettyPrint
@@ -98,7 +99,7 @@ codeGenAcc acc vars =
 
         -- computation nodes
         --
-        -- Generate _ f      -> mkGenerate (codeGenAccTypeDim acc) (codeGenFun f)
+        Generate _ f      -> mkGenerate (codeGenAccTypeDim acc) (codeGenFun f)
         -- Fold f e a        -> mkFold  (codeGenAccTypeDim a) (codeGenExp e) (codeGenFun f)
         -- Fold1 f a         -> mkFold1 (codeGenAccTypeDim a) (codeGenFun f)
         -- FoldSeg f e a s   -> mkFoldSeg  (codeGenAccTypeDim a) (codeGenAccType s) (codeGenExp e) (codeGenFun f)
@@ -109,10 +110,10 @@ codeGenAcc acc vars =
         -- Scanr' f e _      -> mkScanr' (codeGenExpType e) (codeGenExp e) (codeGenFun f)
         -- Scanl1 f a        -> mkScanl1 (codeGenAccType a) (codeGenFun f)
         -- Scanr1 f a        -> mkScanr1 (codeGenAccType a) (codeGenFun f)
-        Map f a           -> mkMap (codeGenAccType acc) (codeGenAccType a) (head $ codeGenFun f) -- TODO shouldnt be head $ codeGenFun f
-        ZipWith f a b     -> mkZipWith (codeGenAccTypeDim acc) (codeGenAccTypeDim a) (codeGenAccTypeDim b) $ head (codeGenFun f) -- TODO shouldnt be head $ codeGenFun f
-        -- Permute f _ g a   -> mkPermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f) (codeGenFun g)
-        -- Backpermute _ f a -> mkBackpermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f)
+        Map f a           -> mkMap (codeGenAccType acc) (codeGenAccType a) (codeGenFun f)
+        ZipWith f a b     -> mkZipWith (codeGenAccTypeDim acc) (codeGenAccTypeDim a) (codeGenAccTypeDim b) (codeGenFun f)
+        Permute f _ g a   -> mkPermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f) (codeGenFun g)
+        Backpermute _ f a -> mkBackpermute (codeGenAccType a) (accDim acc) (accDim a) (codeGenFun f)
         -- Replicate sl _ a  ->
         --   let dimSl  = accDim a
         --       dimOut = accDim acc
@@ -213,9 +214,15 @@ mkPrj ndim var c
 -- are only introduced as arguments to collective operations, so lambdas are
 -- always outermost, and can always be translated into plain C functions.
 --
-codeGenFun :: OpenFun env aenv t -> [C.Exp]
+codeGenFun :: OpenFun env aenv t -> C.Exp
 codeGenFun (Lam  lam)  = codeGenFun lam
-codeGenFun (Body body) = codeGenExp body
+codeGenFun (Body body) = seqexps $ codeGenExp body
+
+seqexps :: [C.Exp] -> C.Exp
+seqexps = foldl1 seqe
+
+seqe :: C.Exp -> C.Exp -> C.Exp
+e1 `seqe` e2 = C.Seq e1 e2 Loc.noSrcLoc
 
 
 -- Embedded scalar computations

@@ -30,7 +30,8 @@ instance Show CUTranslSkel where
   show (CUTranslSkel code) = header ++ (unlines $ map show code)
 
 header :: String
-header = "#include <accelerate_opencl_shape.h>\n\n"
+header = "#pragma OPENCL EXTENSION cl_amd_printf : enable\n\n"
+      ++ "#include <accelerate_opencl_shape.h>\n\n"
 
 
 -- instance Pretty CUTranslSkel where

@@ -52,8 +52,8 @@ mkTupleType subscript types = do
         | otherwise = [tuple_name]
 
   addDefinitions $ zipWith (mkTypedef volatile) tynames types
-  args <- mkParameterList subscript n tynames
-  (maybe mkSet mkGet subscript) n tynames
+  (args,ps) <- mkParameterList subscript n tynames
+  (maybe mkSet mkGet subscript) n tynames ps
   when (n > 1) $ addDefinition (mkStruct tuple_name volatile types)
   return args
 
@@ -69,10 +69,11 @@ mkTupleTypeAsc n types = do
       a <- mkInputTuple (show $ n-1) types
       return $ a : as
 
-mkParameterList :: Maybe String -> Int -> [String] -> CGM Arguments
+mkParameterList :: Maybe String -> Int -> [String] -> CGM (Arguments, [Param])
 mkParameterList subscript n tynames = do
-  addParams $ params (zip types' param_names)
-  return args
+  let ps = params (zip types' param_names)
+  addParams ps
+  return (args, ps)
   where
     param_prefix = maybe "out" ("in" ++) subscript
     param_names
@@ -86,41 +87,41 @@ mkParameterList subscript n tynames = do
     --     Nothing -> Set $ \idx val -> [cexp|set($id:idx, $id:val, $args:args)|]
     --     Just x  -> Get $ \idx -> [cexp|$id:("get" ++ x)($id:idx, $args:args)|]
 
-mkGet :: String -> Int -> [String] -> CGM ()
-mkGet prj n tynames = do
-  params <- getParams
-  let name = "get" ++ prj
-      param_name = "in" ++ prj
-      returnType = typename $ "TyIn" ++ prj
-      assign i name = let field = 'a' : show i
-                      in [cstm|val.$id:field = $id:name [idx];|]
-      assignments
-        | n > 1     = zipWith assign [0..] tynames
-        | otherwise = [ [cstm|val = $id:param_name [idx];|] ]
-
+mkGet :: String -> Int -> [String] -> [Param] -> CGM ()
+mkGet prj n tynames params = do
   addDefinition
      [cedecl|
-       inline $ty:returnType $id:name(const $ty:ix idx, $params:params) {
+       inline $ty:returnType $id:name($ty:ix idx, $params:params) {
          $ty:returnType val;
          $stms:assignments
          return val;
        }
      |]
+   where
+     name = "get" ++ prj
+     param_name = "in" ++ prj
+     returnType = typename $ "TyIn" ++ prj
+     assign i name = let field = 'a' : show i
+                     in [cstm|val.$id:field = $id:name [idx];|]
+     assignments
+      | n > 1     = zipWith assign [0..] tynames
+      | otherwise = [ [cstm|val = $id:param_name [idx];|] ]
 
-mkSet :: Int -> [String] -> CGM ()
-mkSet n tynames = do
-  params <- getParams
-  let assign i name = let field = 'a' : show i
-                      in [cstm|$id:name [idx] = val.$id:field;|]
-      assignments
-        | n > 1     = zipWith assign [0..] tynames
-        | otherwise = [ [cstm|out[idx] = val;|] ]
+
+mkSet :: Int -> [String] -> [Param] -> CGM ()
+mkSet n tynames params =
   addDefinition
      [cedecl|
-       inline void set(const $ty:ix idx, const $ty:outType val, $params:params) {
+       inline void set($ty:ix idx, const $ty:outType val, $params:params) {
          $stms:assignments
        }
      |]
+   where
+     assign i name = let field = 'a' : show i
+                     in [cstm|$id:name [idx] = val.$id:field;|]
+     assignments
+      | n > 1     = zipWith assign [0..] tynames
+      | otherwise = [ [cstm|out[idx] = val;|] ]
 
 -- TODO partition
 -- TODO understand difference between mkTupleType and mkTupleTypeAsc

@@ -98,7 +98,7 @@ showAcc acc@(OpenAcc pacc) =
 
 
     showFun :: OpenFun env aenv a -> String
-    showFun = pretty 100 . cat . map ppr . codeGenFun
+    showFun = pretty 100 . ppr . codeGenFun
 
     showExp :: OpenExp env aenv a -> String
     showExp = pretty 100 . cat . map ppr . codeGenExp
