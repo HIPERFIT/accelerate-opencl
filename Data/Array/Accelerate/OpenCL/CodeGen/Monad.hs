@@ -18,7 +18,7 @@ emptySkelState = SkelState [] []
 type CGM = State SkelState
 
 runCGM :: CGM () -> CUTranslSkel
-runCGM st = CUTranslSkel . _definitions $ execState st emptySkelState
+runCGM st = CUTranslSkel . reverse . _definitions $ execState st emptySkelState
 
 
 -- Setters
@@ -28,7 +28,7 @@ addDefinition def =
 
 addParam :: Param -> CGM ()
 addParam param =
-  modify $ \s -> s {_params = param : (_params s)}
+  modify $ \s -> s {_params = (_params s) ++ [param]}
 
 addDefinitions :: [Definition] -> CGM ()
 addDefinitions = mapM_ addDefinition
