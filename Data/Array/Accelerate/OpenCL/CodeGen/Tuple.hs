@@ -18,6 +18,7 @@ module Data.Array.Accelerate.OpenCL.CodeGen.Tuple
   where
 
 import Data.Maybe
+import Data.Char
 
 -- Quasiquotation library
 import Language.C.Quote.OpenCL
@@ -58,16 +59,11 @@ mkTupleType subscript types = do
   return args
 
 mkTupleTypeAsc :: Int -> [Type] -> CGM (Arguments, [Arguments])
-mkTupleTypeAsc n types = do
-  argsOut <- mkOutputTuple types
-  argsIn <- mkInputTuples (n-1)
+mkTupleTypeAsc n typ = do
+  argsOut <- mkOutputTuple typ
+  let names = [ [chr $ ord 'A' + i] | i <- [0..n-1]]
+  argsIn <- mapM (flip mkInputTuple typ) names
   return $ (argsOut, argsIn)
-  where
-    mkInputTuples 0 = return []
-    mkInputTuples n = do
-      as <- mkInputTuples (n-1)
-      a <- mkInputTuple (show $ n-1) types
-      return $ a : as
 
 mkParameterList :: Maybe String -> Int -> [String] -> CGM (Arguments, [Param])
 mkParameterList subscript n tynames = do
@@ -82,10 +78,6 @@ mkParameterList subscript n tynames = do
     types' = map (mkPtr . mkGlobal . typename) tynames
 
     args = map (\p -> [cexp|$id:p|]) param_names
-    -- accessorCall =
-    --   case subscript of
-    --     Nothing -> Set $ \idx val -> [cexp|set($id:idx, $id:val, $args:args)|]
-    --     Just x  -> Get $ \idx -> [cexp|$id:("get" ++ x)($id:idx, $args:args)|]
 
 mkGet :: String -> Int -> [Param] -> CGM ()
 mkGet prj n params = do

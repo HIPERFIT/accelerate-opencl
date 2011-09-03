@@ -44,6 +44,7 @@ import Control.Monad
 import Control.Monad.Trans
 import System.IO.Unsafe
 
+import Foreign.Storable
 import Foreign.Ptr (Ptr)
 
 import qualified Foreign.OpenCL.Bindings                                  as OpenCL
@@ -286,7 +287,7 @@ replicateOp :: (Shape dim, Elt slix)
             -> CIO (Array dim e)
 replicateOp c kernel bindings acc aenv sliceIndex slix (Array sh0 in0) = do
   res@(Array sh out) <- newArray c (toElt $ extend sliceIndex (fromElt slix) sh0)
-  execute kernel bindings acc aenv (size sh) (((((),out),in0),convertIx sh0),convertIx sh)
+  execute kernel bindings acc aenv (size sh) (((((), convertIx sh0), convertIx sh), out), in0)
   freeArray in0
   return res
   where
@@ -309,7 +310,7 @@ indexOp :: (Shape sl, Elt slix)
 indexOp c kernel bindings acc aenv sliceIndex (Array sh0 in0) slix = do
   res@(Array sh out) <- newArray c (toElt $ restrict sliceIndex (fromElt slix) sh0)
   execute kernel bindings acc aenv (size sh)
-    ((((((),out),in0),convertIx sh),convertSlix sliceIndex (fromElt slix)),convertIx sh0)
+    ((((((),convertIx sh),convertSlix sliceIndex (fromElt slix)),convertIx sh0),in0),out)
   freeArray in0
   return res
   where
@@ -700,8 +701,8 @@ instance Marshalable OpenCL.KernelArg where
 instance AD.ArrayElt e => Marshalable (AD.ArrayData e) where
   marshal = marshalArrayData    -- Marshalable (DevicePtrs a) does not type )=
 
-instance Marshalable a => Marshalable [a] where
-  marshal = concatMapM marshal
+instance Storable a => Marshalable [a] where
+  marshal args = return $ [OpenCL.StructArg args]
 
 instance (Marshalable a, Marshalable b) => Marshalable (a,b) where
   marshal (a,b) = (++) <$> marshal a <*> marshal b

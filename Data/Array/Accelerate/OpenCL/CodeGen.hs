@@ -280,7 +280,7 @@ codeGenExp (Cond p t e) =
 
 codeGenExp (Size a)         = return $ ccall "size" (codeGenExp (Shape a))
 codeGenExp (Shape a)
-  | OpenAcc (Avar var) <- a = return $ cvar ("sh" ++ show (idxToInt var))
+  | OpenAcc (Avar var) <- a = return $ cvar ("sh" ++ idxToString var)
   | otherwise               = INTERNAL_ERROR(error) "codeGenExp" "expected array variable"
 
 idxToString :: forall env t. Idx env t -> String

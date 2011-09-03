@@ -18,8 +18,7 @@ module Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
     mkMap, mkZipWith,
 --    mkStencil, mkStencil2,
 --    mkScanl, mkScanr, mkScanl', mkScanr', mkScanl1, mkScanr1,
-    mkPermute, mkBackpermute, mkReplicate
---, mkIndex
+    mkPermute, mkBackpermute, mkReplicate, mkIndex
   )
   where
 
@@ -30,8 +29,6 @@ import Language.C.Quote.OpenCL
 import Data.Loc
 import Data.Symbol
 
-
---import System.FilePath
 --import Data.Array.Accelerate.Type
 import Data.Array.Accelerate.OpenCL.CodeGen.Data
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
@@ -46,8 +43,8 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Monad
 mkGenerate :: ([C.Type],Int) -> C.Exp -> CUTranslSkel
 mkGenerate (tyOut, dimOut) apply = runCGM $ do
     d_out <- mkOutputTuple tyOut
-    mkShape "DimOut" dimOut
-    mkShape "TyInA" dimOut
+    mkDim "DimOut" dimOut
+    mkDim "TyInA" dimOut
 
     mkApply 1 apply
 
@@ -158,9 +155,9 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
     d_inB <- mkInputTuple "B" tyInB
     mkApply 2 apply
 
-    mkShape "DimOut" dimOut
-    mkShape "DimInB" dimInB
-    mkShape "DimInA" dimInA
+    mkDim "DimOut" dimOut
+    mkDim "DimInB" dimInB
+    mkDim "DimInA" dimInA
 
     ps <- getParams
     addDefinitions
@@ -281,8 +278,8 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
 mkPermute :: [C.Type] -> Int -> Int -> C.Exp -> C.Exp -> CUTranslSkel
 mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
     (d_out, d_inA : _) <- mkTupleTypeAsc 2 ty
-    mkShape "DimOut" dimOut
-    mkShape "DimInA" dimInA
+    mkDim "DimOut" dimOut
+    mkDim "DimInA" dimInA
 
     mkApply 2 combinefn
     mkProject Forward indexfn
@@ -315,8 +312,8 @@ mkPermute ty dimOut dimInA combinefn indexfn = runCGM $ do
 mkBackpermute :: [C.Type] -> Int -> Int -> C.Exp -> CUTranslSkel
 mkBackpermute ty dimOut dimInA indexFn = runCGM $ do
     (d_out, d_inA : _) <- mkTupleTypeAsc 1 ty
-    mkShape "DimOut" dimOut
-    mkShape "DimInA" dimInA
+    mkDim "DimOut" dimOut
+    mkDim "DimInA" dimInA
 
     mkProject Backward indexFn
 
@@ -340,34 +337,51 @@ mkBackpermute ty dimOut dimInA indexFn = runCGM $ do
       |]
 
 
--- -- Multidimensional Index and Replicate
--- -- ------------------------------------
+-- Multidimensional Index and Replicate
+-- ------------------------------------
 
--- mkIndex :: [CType] -> Int -> Int -> Int -> [CExpr] -> CUTranslSkel
--- mkIndex ty dimSl dimCo dimIn0 slix = CUTranslSkel code [] skel
---   where
---     skel = "slice.inl"
---     code = CTranslUnit
---             ( mkTupleTypeAsc 1 ty ++
---             [ mkDim "Slice"    dimSl
---             , mkDim "CoSlice"  dimCo
---             , mkDim "SliceDim" dimIn0
---             , mkSliceIndex slix ])
---             (mkNodeInfo (initPos skel) (Name 0))
+mkIndex :: [C.Type] -> Int -> Int -> Int -> C.Exp -> CUTranslSkel
+mkIndex ty dimSl dimCo dimInA slix = runCGM $ do
+    (d_out, d_inA : _) <- mkTupleTypeAsc 1 ty
+    mkDim "Slice" dimSl
+    mkDim "SliceDim" dimCo
+    mkDim "SliceDim" dimInA
+
+    mkSliceIndex slix
+
+    ps <- getParams
+    addDefinitions
+      [cunit|
+         __kernel void slice (const typename Slice slice,
+                              const typename CoSlice slix,
+                              const typename SliceDim sliceDim,
+                              $params:ps) {
+           const typename Ix shapeSize = $id:(size dimSl)(slice);
+           const typename Ix gridSize  = get_global_size(0);
+
+           for (typename Ix ix = get_global_id(0); ix < shapeSize; ix += gridSize) {
+             typename Slice dst = $id:(fromIndex dimSl)(slice, ix);
+             typename SliceDim src = sliceIndex(dst);
+
+             typename Ix j = $id:(toIndex dimInA)(sliceDim, src);
+             set(ix, getA(j, $args:d_inA), $args:d_out) ;
+           }
+         }
+      |]
 
 mkReplicate :: [C.Type] -> Int -> Int -> C.Exp -> CUTranslSkel
 mkReplicate ty dimSl dimOut slix = runCGM $ do
     (d_out, d_inA : _) <- mkTupleTypeAsc 1 ty
-    mkShape "Slice" dimSl
-    mkShape "SliceDim" dimOut
+    mkDim "Slice" dimSl
+    mkDim "SliceDim" dimOut
 
     mkSliceReplicate slix
 
     ps <- getParams
     addDefinitions
       [cunit|
-         __kernel void replicate (const typename Slice shOut,
-                                  const typename SliceDim shInA,
+         __kernel void replicate (const typename Slice slice,
+                                  const typename SliceDim sliceDim,
                                   $params:ps) {
              const typename Ix shapeSize = $id:(size dimOut)(sliceDim);
              const typename Ix gridSize  = get_global_size(0);

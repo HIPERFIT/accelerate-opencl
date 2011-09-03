@@ -37,14 +37,15 @@ mkApply argc exp
 mkProject :: Direction -> Exp -> CGM ()
 mkProject Forward exp =
   addDefinition $
-    (mkDeviceFun "project" (typename "DimOut") $ params [(typename "DimIn0","x0")]) exp
+    (mkDeviceFun "project" (typename "DimOut") $ params [(typename "DimInA","xA")]) exp
 mkProject Backward exp =
   addDefinition $
-    (mkDeviceFun "project" (typename "DimIn0") $ params [(typename "DimOut","x0")]) exp
+    (mkDeviceFun "project" (typename "DimInA") $ params [(typename "DimOut","xA")]) exp
 
-mkSliceIndex :: Exp -> Definition
-mkSliceIndex =
-  mkDeviceFun "sliceIndex" (typename "SliceDim") $ params [(typename "Slice","sl"), (typename "CoSlice","co")]
+mkSliceIndex :: Exp -> CGM ()
+mkSliceIndex exp =
+  addDefinition $
+    (mkDeviceFun "sliceIndex" (typename "SliceDim") $ params [(typename "Slice","sl"), (typename "CoSlice","co")]) exp
 
 mkSliceReplicate :: Exp -> CGM ()
 mkSliceReplicate exp =
@@ -83,8 +84,8 @@ fromBool :: Bool -> Exp
 fromBool True  = [cexp|1|]
 fromBool False = [cexp|0|]
 
-mkDim :: String -> Int -> Definition
-mkDim name n = [cedecl|typedef $ty:dim $id:name;|]
+mkDim :: String -> Int -> CGM ()
+mkDim name n = addDefinition [cedecl|typedef $ty:dim $id:name;|]
    where dim = typename $ "DIM" ++ show n
 
 mkVolatile :: Type -> Type
@@ -107,11 +108,6 @@ mkTypedef :: Bool -> String -> Type -> Definition
 mkTypedef volatile tyname typ | volatile = let typ' = mkVolatile typ
                                            in [cedecl|typedef $ty:typ' $id:tyname;|]
                               | otherwise = [cedecl|typedef $ty:typ $id:tyname;|]
-
-mkShape :: String -> Int -> CGM ()
-mkShape name 0 = addDefinition [cedecl| typedef void* $id:name; |]
-mkShape name 1 = addDefinition [cedecl| typedef $ty:ix $id:name; |]
-mkShape name dim = addDefinition $ mkStruct name False (replicate dim ix)
 
 toIndex :: Int -> String
 toIndex dim = "toIndexDIM" ++ show dim

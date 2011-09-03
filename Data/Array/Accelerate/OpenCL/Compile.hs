@@ -595,7 +595,7 @@ compile table key acc fvar = do
   -- Compile in another thread
   _ <- liftIO . forkIO $ do
          let p = (show $ codeGenAcc acc fvar)
---         putStrLn p
+         putStrLn p
          prog <- OpenCL.createProgram ctx p
          OpenCL.buildProgram prog (map fst devices) =<< compileFlags
          putMVar mvar prog
