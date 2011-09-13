@@ -11,6 +11,7 @@ Stability:              Experimental
 Category:               Compilers/Interpreters, Concurrency, Data
 
 Data-files:             clbits/accelerate_opencl_shape.h
+                        clbits/reduce.cl
 
 Extra-source-files:     include/accelerate.h
 
@@ -25,31 +26,29 @@ Flag bounds-checks
 
 Flag unsafe-checks
   Description:          Enable bounds checking in unsafe operations
-  Default:              False
+  Default:              True
 
 Flag internal-checks
   Description:          Enable internal consistency checks
-  Default:              False
+  Default:              True
 
 
 Library
-  Build-depends:        base                 >= 4.3
-                      , accelerate           >= 0.9
-                      , pretty               >= 1.0
-                      , language-c-quote     >= 0.3.0.0
+  Build-depends:        base                 == 4.3.*
+                      , accelerate           == 0.9.*
+                      , pretty               == 1.0.*
+                      , language-c-quote     == 0.3.*
                       , mainland-pretty
                       , srcloc
                       , symbol
-                      , hopencl              >= 0.1.1
-                      , mtl                  >= 2.0
+                      , hopencl              == 0.1.*
+                      , mtl                  == 2.0.*
                       , fclabels             >= 0.9 && < 1.0
                       , bytestring
                       , zlib
                       , transformers         == 0.2.*
                       , directory
                       , filepath
-                      , binary
-                      , unix            == 2.4.*
 
   Exposed-modules:      Data.Array.Accelerate.OpenCL
 
@@ -59,6 +58,7 @@ Library
                         Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
                         Data.Array.Accelerate.OpenCL.CodeGen.Monad
                         Data.Array.Accelerate.OpenCL.CodeGen.Tuple
+                        Data.Array.Accelerate.OpenCL.CodeGen.Reduce
                         Data.Array.Accelerate.OpenCL.Analysis.Hash
                         Data.Array.Accelerate.OpenCL.Analysis.Device
                         Data.Array.Accelerate.OpenCL.Array.Data

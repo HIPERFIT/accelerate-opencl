@@ -12,27 +12,29 @@
 
 module Data.Array.Accelerate.OpenCL.CodeGen.Data
   (
-    --CType, CMacro, 
     CUTranslSkel(..)
   )
   where
 
 import Language.C
---import Text.PrettyPrint
 
---type CType        = [TypeSpec]
---type CMacro       = (Id, Maybe Exp)
-data CUTranslSkel = CUTranslSkel [Definition] --[CMacro]
---                                 FilePath
+
+data CUTranslSkel = CUTranslSkel [Definition]
+
 
 
 instance Show CUTranslSkel where
-  show (CUTranslSkel code) = header ++ (unlines $ map show code)
+  show (CUTranslSkel code) =
+    header
+      ++ (unlines $ map show code)
 
 header :: String
 header = "#pragma OPENCL EXTENSION cl_amd_printf : enable\n\n"
-      ++ "#include <accelerate_opencl_shape.h>\n\n"
+      ++ include "accelerate_opencl_shape.h"
 
+
+include :: FilePath -> String
+include hdr = "#include <" ++ hdr ++ ">\n"
 
 -- instance Pretty CUTranslSkel where
 --   pretty (CUTranslSkel code defs skel) =
@@ -42,9 +44,6 @@ header = "#pragma OPENCL EXTENSION cl_amd_printf : enable\n\n"
 --          , include skel
 --          ]
 
-
--- include :: FilePath -> Doc
--- include hdr = text "#include <" <> text hdr <> text ">"
 
 -- macro :: CMacro -> Doc
 -- macro (d,v) = text "#define" <+> text (identToString d)

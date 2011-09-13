@@ -373,7 +373,7 @@ foldOp c kernel bindings acc aenv (Array sh0 in0)
   | dim sh0 == 1 = do
       cfg@(_,_,(_,g,_)) <- configure kernel acc (size sh0)
       res@(Array _ out) <- newArray (bool c 1 (g > 1)) (toElt (fst sh0,g)) :: CIO (Array (dim:.Int) e)
-      dispatch cfg bindings aenv ((((),out),in0),size sh0)
+      dispatch cfg bindings aenv ((((),size sh0),out),in0)
       freeArray in0
       if g > 1 then foldOp c kernel bindings acc aenv res
                else return (Array (fst sh0) out)

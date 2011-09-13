@@ -12,7 +12,7 @@
 module Data.Array.Accelerate.OpenCL.CodeGen.Tuple
   (
     mkInputTuple, mkOutputTuple, --Accessor (..),
-    mkTupleTypeAsc
+    mkTupleTypeAsc, Arguments
     --    mkTupleType, mkTuplePartition
   )
   where
@@ -35,13 +35,14 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Util
 -- data Accessor = Get (String -> Exp)
 --               | Set (String -> String -> Exp)
 
+
 type Arguments = [Exp]
 
 mkInputTuple :: String -> [Type]-> CGM Arguments
-mkInputTuple subscript types = mkTupleType (Just subscript) types
+mkInputTuple subscript = mkTupleType (Just subscript)
 
 mkOutputTuple :: [Type]-> CGM Arguments
-mkOutputTuple types = mkTupleType Nothing types
+mkOutputTuple = mkTupleType Nothing
 
 mkTupleType :: Maybe String -> [Type] -> CGM Arguments
 mkTupleType subscript types = do
@@ -54,8 +55,11 @@ mkTupleType subscript types = do
 
   addDefinitions $ zipWith (mkTypedef volatile) tynames types
   when (n > 1) $ addDefinition (mkStruct tuple_name volatile types)
-  (args,ps) <- mkParameterList subscript n tynames
-  (maybe mkSet mkGet subscript) n ps
+  (args,ps) <- mkParameterList Global subscript n tynames
+  (_,psLocal) <- mkParameterList Local subscript n tynames
+  (maybe mkSet mkGet subscript) n ps Global
+  (maybe mkSet mkGet subscript) n psLocal Local
+  addParams ps
   return args
 
 mkTupleTypeAsc :: Int -> [Type] -> CGM (Arguments, [Arguments])
@@ -65,22 +69,32 @@ mkTupleTypeAsc n typ = do
   argsIn <- mapM (flip mkInputTuple typ) names
   return $ (argsOut, argsIn)
 
-mkParameterList :: Maybe String -> Int -> [String] -> CGM (Arguments, [Param])
-mkParameterList subscript n tynames = do
+-- mkLocalAccessors :: Int -> [Type] -> CGM ()
+-- mkLocalAccessors subscript types = do
+--   let names = [ [chr $ ord 'A' + i] | i <- [0..n-1]]
+--       n = length types
+--       tynames
+--         | n > 1     = take n [tuple_name ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
+--         | otherwise = [tuple_name]
+--   (argsOut, psout) <-  mkParameterList Local Nothing n
+--   argsIn <- mapM (flip mkInputTuple typ) names
+--   return $ (argsOut, argsIn)
+
+mkParameterList :: StorageQual -> Maybe String -> Int -> [String] -> CGM (Arguments, [Param])
+mkParameterList storage subscript n tynames = do
   let ps = params (zip types' param_names)
-  addParams ps
   return (args, ps)
-  where
+   where
     param_prefix = maybe "out" ("in" ++) subscript
     param_names
       | n > 1     = take n [param_prefix ++ "_" ++ show i | i <- [0..]] -- inA_0, inB_0, ..
       | otherwise = [param_prefix] -- inA or out
-    types' = map (mkPtr . mkGlobal . typename) tynames
+    types' = map (mkPtr . changeStorage storage . typename) tynames
 
     args = map (\p -> [cexp|$id:p|]) param_names
 
-mkGet :: String -> Int -> [Param] -> CGM ()
-mkGet prj n params = do
+mkGet :: String -> Int -> [Param] -> StorageQual -> CGM ()
+mkGet prj n params storage = do
   addDefinition
      [cedecl|
        inline $ty:returnType $id:name($ty:ix idx, $params:params) {
@@ -91,7 +105,8 @@ mkGet prj n params = do
      |]
    where
      parnames = ["in" ++ prj ++ "_" ++ show i | i <- [0..]]
-     name = "get" ++ prj
+     name | storage == Local = "get" ++ prj ++ "_local"
+          | otherwise = "get" ++ prj
      returnType = typename $ "TyIn" ++ prj
      assign i name = let field = 'a' : show i
                      in [cstm|val.$id:field = $id:name [idx];|]
@@ -100,15 +115,17 @@ mkGet prj n params = do
       | otherwise = [ [cstm|val = $id:("in" ++ prj) [idx];|] ]
 
 
-mkSet :: Int -> [Param] -> CGM ()
-mkSet n params =
+mkSet :: Int -> [Param] -> StorageQual -> CGM ()
+mkSet n params storage =
   addDefinition
      [cedecl|
-       inline void set($ty:ix idx, const $ty:outType val, $params:params) {
+       inline void $id:name($ty:ix idx, const $ty:outType val, $params:params) {
          $stms:assignments
        }
      |]
    where
+     name | storage == Local = "set_local"
+          | otherwise = "set"
      parnames = ["out" ++ "_" ++ show i | i <- [0..]]
      assign i name = let field = 'a' : show i
                      in [cstm|$id:name [idx] = val.$id:field;|]

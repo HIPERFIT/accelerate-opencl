@@ -14,7 +14,8 @@
 module Data.Array.Accelerate.OpenCL.CodeGen.Skeleton
   (
     mkGenerate,
-  -- mkFold, mkFold1, mkFoldSeg, mkFold1Seg,
+    mkFold, mkFold1,
+--, mkFoldSeg, mkFold1Seg,
     mkMap, mkZipWith,
 --    mkStencil, mkStencil2,
 --    mkScanl, mkScanr, mkScanl', mkScanr', mkScanl1, mkScanr1,
@@ -34,6 +35,7 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Data
 import Data.Array.Accelerate.OpenCL.CodeGen.Util
 import Data.Array.Accelerate.OpenCL.CodeGen.Tuple
 import Data.Array.Accelerate.OpenCL.CodeGen.Monad
+import Data.Array.Accelerate.OpenCL.CodeGen.Reduce (mkFold, mkFold1)
 --import Data.Array.Accelerate.CUDA.CodeGen.Stencil
 
 
@@ -62,66 +64,6 @@ mkGenerate (tyOut, dimOut) apply = runCGM $ do
              }
          }
       |]
-
--- Reduction
--- ---------
-
--- mkFold :: ([CType],Int) -> [CExpr] -> [CExpr] -> CUTranslSkel
--- mkFold (ty,dim) identity apply = CUTranslSkel code [] skel
---   where
---     skel | dim == 1  = "foldAll.inl"
---          | otherwise = "fold.inl"
---     code = CTranslUnit
---             ( mkTupleTypeAsc 2 ty ++
---             [ mkTuplePartition "ArrOut" ty True
---             , mkIdentity identity
---             , mkApply 2 apply
---             , mkDim "DimIn0" dim
---             , mkDim "DimOut" (dim-1) ])
---             (mkNodeInfo (initPos skel) (Name 0))
-
--- mkFold1 :: ([CType],Int) -> [CExpr] -> CUTranslSkel
--- mkFold1 (ty,dim) apply = CUTranslSkel code inc skel
---   where
---     skel | dim == 1  = "foldAll.inl"
---          | otherwise = "fold.inl"
---     inc  = [(internalIdent "INCLUSIVE", Just (fromBool True))]
---     code = CTranslUnit
---             ( mkTupleTypeAsc 2 ty ++
---             [ mkTuplePartition "ArrOut" ty True
---             , mkApply 2 apply
---             , mkDim "DimIn0" dim
---             , mkDim "DimOut" (dim-1) ])
---             (mkNodeInfo (initPos skel) (Name 0))
-
--- mkFoldSeg :: ([CType],Int) -> [CType] -> [CExpr] -> [CExpr] -> CUTranslSkel
--- mkFoldSeg (ty,dim) int identity apply = CUTranslSkel code [] skel
---   where
---     skel = "foldSeg.inl"
---     code = CTranslUnit
---             ( mkTupleTypeAsc 2 ty ++
---             [ mkTuplePartition "ArrOut" ty True
---             , mkIdentity identity
---             , mkApply 2 apply
---             , mkTypedef "Int" False False (head int)
---             , mkDim "DimIn0" dim
---             , mkDim "DimOut" dim ])
---             (mkNodeInfo (initPos skel) (Name 0))
-
--- mkFold1Seg :: ([CType],Int) -> [CType] -> [CExpr] -> CUTranslSkel
--- mkFold1Seg (ty,dim) int apply = CUTranslSkel code inc skel
---   where
---     skel = "foldSeg.inl"
---     inc  = [(internalIdent "INCLUSIVE", Just (fromBool True))]
---     code = CTranslUnit
---             ( mkTupleTypeAsc 2 ty ++
---             [ mkTuplePartition "ArrOut" ty True
---             , mkApply 2 apply
---             , mkTypedef "Int" False False (head int)
---             , mkDim "DimIn0" dim
---             , mkDim "DimOut" dim ])
---             (mkNodeInfo (initPos skel) (Name 0))
-
 
 -- Map
 -- ---

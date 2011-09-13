@@ -25,14 +25,22 @@ outType = typename "TyOut"
 -- Common device functions
 -- -----------------------
 
-mkIdentity :: Exp -> Definition
-mkIdentity = mkDeviceFun "identity" (typename "TyOut") []
+mkIdentity :: Exp -> CGM ()
+mkIdentity exp = addDefinition $ mkDeviceFun "identity" (typename "TyOut") [] exp
 
 mkApply :: Int -> Exp -> CGM ()
 mkApply argc exp
   = addDefinition $
       (mkDeviceFun "apply" outType
        $ params $ map (\c -> (typename ("TyIn"++ [c]), 'x' : [c])) $ reverse $ take argc ['A'..]) exp
+
+-- For associative apply function
+mkApplyAsc :: Int -> Exp -> CGM ()
+mkApplyAsc argc exp
+  = addDefinition $
+      (mkDeviceFun "apply" outType
+       $ params $ map (\c -> (typename ("TyInA"), 'x' : [c])) $ reverse $ take argc ['A'..]) exp
+
 
 mkProject :: Direction -> Exp -> CGM ()
 mkProject Forward exp =
@@ -98,11 +106,17 @@ mkPtr (Type (DeclSpec storage quals typ l0) _ l1) =
   Type (DeclSpec storage quals typ l0) (Ptr [] (DeclRoot noSrcLoc) noSrcLoc) l1
 mkPtr _ = error "Not a DeclSpec"
 
-mkGlobal :: Type -> Type
-mkGlobal (Type (DeclSpec storage quals typ l0) _ l1) =
-  Type (DeclSpec storage ((TCLGlobal noSrcLoc) : quals) typ l0) (DeclRoot noSrcLoc) l1
-mkGlobal _ = error "Not a DeclSpec"
+data StorageQual = Global | Local
+                 deriving (Eq, Show)
 
+changeStorage :: StorageQual -> Type -> Type
+changeStorage stor (Type (DeclSpec storage quals typ l0) _ l1) =
+  Type (DeclSpec storage (s : quals) typ l0) (DeclRoot noSrcLoc) l1
+     where
+       s = case stor of
+             Global -> TCLGlobal noSrcLoc
+             Local  -> TCLLocal noSrcLoc
+changeStorage _ _ = error "Not a DeclSpec"
 
 mkTypedef :: Bool -> String -> Type -> Definition
 mkTypedef volatile tyname typ | volatile = let typ' = mkVolatile typ

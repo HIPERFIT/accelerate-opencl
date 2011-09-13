@@ -100,8 +100,8 @@ codeGenAcc acc vars =
         -- computation nodes
         --
         Generate _ f      -> mkGenerate (codeGenAccTypeDim acc) (codeGenFun f)
-        -- Fold f e a        -> mkFold  (codeGenAccTypeDim a) (codeGenExp e) (codeGenFun f)
-        -- Fold1 f a         -> mkFold1 (codeGenAccTypeDim a) (codeGenFun f)
+        Fold f e a        -> mkFold  (codeGenAccTypeDim a) (seqexps $ codeGenExp e) (codeGenFun f)
+        Fold1 f a         -> mkFold1 (codeGenAccTypeDim a) (codeGenFun f)
         -- FoldSeg f e a s   -> mkFoldSeg  (codeGenAccTypeDim a) (codeGenAccType s) (codeGenExp e) (codeGenFun f)
         -- Fold1Seg f a s    -> mkFold1Seg (codeGenAccTypeDim a) (codeGenAccType s) (codeGenFun f)
         -- Scanl f e _       -> mkScanl  (codeGenExpType e) (codeGenExp e) (codeGenFun f)
@@ -125,17 +125,17 @@ codeGenAcc acc vars =
           in
           mkReplicate (codeGenAccType a) dimSl dimOut . seqexps . reverse $ extend sl 0
 
---         -- Index sl a slix   ->
---         --   let dimCo  = length (codeGenExpType slix)
---         --       dimSl  = accDim acc
---         --       dimIn0 = accDim a
---         --       --
---         --       restrict :: SliceIndex slix sl co dim -> (Int,Int) -> [CExpr]
---         --       restrict (SliceNil)            _     = []
---         --       restrict (SliceAll   sliceIdx) (m,n) = mkPrj dimSl "sl" n : restrict sliceIdx (m,n+1)
---         --       restrict (SliceFixed sliceIdx) (m,n) = mkPrj dimCo "co" m : restrict sliceIdx (m+1,n)
---         --   in
---         --   mkIndex (codeGenAccType a) dimSl dimCo dimIn0 . reverse $ restrict sl (0,0)
+        Index sl a slix   ->
+          let dimCo  = length (codeGenExpType slix)
+              dimSl  = accDim acc
+              dimIn0 = accDim a
+              --
+              restrict :: SliceIndex slix sl co dim -> (Int,Int) -> [C.Exp]
+              restrict (SliceNil)            _     = []
+              restrict (SliceAll   sliceIdx) (m,n) = mkPrj dimSl "sl" n : restrict sliceIdx (m,n+1)
+              restrict (SliceFixed sliceIdx) (m,n) = mkPrj dimCo "co" m : restrict sliceIdx (m+1,n)
+          in
+          mkIndex (codeGenAccType a) dimSl dimCo dimIn0 . seqexps . reverse $ restrict sl (0,0)
 
 --         -- Stencil f bndy a     ->
 --         --   let ty0   = codeGenTupleTex (accType a)
