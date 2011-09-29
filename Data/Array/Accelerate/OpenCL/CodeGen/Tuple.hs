@@ -12,7 +12,8 @@
 module Data.Array.Accelerate.OpenCL.CodeGen.Tuple
   (
     mkInputTuple, mkOutputTuple, --Accessor (..),
-    mkTupleTypeAsc, Arguments
+    mkTupleTypeAsc, Arguments,
+    mkParameterList
     --    mkTupleType, mkTuplePartition
   )
   where
@@ -54,7 +55,7 @@ mkTupleType subscript types = do
         | otherwise = [tuple_name]
 
   addDefinitions $ zipWith (mkTypedef volatile) tynames types
-  when (n > 1) $ addDefinition (mkStruct tuple_name volatile types)
+  when (n > 1) $ addDefinition (mkStruct tuple_name volatile $ map typename tynames)
   (args,ps) <- mkParameterList Global subscript n tynames
   (_,psLocal) <- mkParameterList Local subscript n tynames
   (maybe mkSet mkGet subscript) n ps Global
@@ -62,11 +63,30 @@ mkTupleType subscript types = do
   addParams ps
   return args
 
+mkInputTypedef :: String -> Int -> CGM Arguments
+mkInputTypedef subscript n = do
+  let tuple_name = "TyIn" ++ subscript
+      tynames_in
+        | n > 1     = take n [tuple_name ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
+        | otherwise = [tuple_name]
+      tynames_out
+        | n > 1     = take n ["TyOut" ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
+        | otherwise = ["TyOut"]
+
+  addDefinitions $ zipWith (mkTypedef True) tynames_in $ map typename tynames_out
+  when (n > 1) $ addDefinition $ mkTypedef False tuple_name (typename "TyOut")
+  (args,ps) <- mkParameterList Global (Just subscript) n tynames_in
+  (_,psLocal) <- mkParameterList Local (Just subscript) n tynames_in
+  mkGet subscript n ps Global
+  mkGet subscript n psLocal Local
+  addParams ps
+  return args
+
 mkTupleTypeAsc :: Int -> [Type] -> CGM (Arguments, [Arguments])
-mkTupleTypeAsc n typ = do
+mkTupleTypeAsc cargs typ = do
   argsOut <- mkOutputTuple typ
-  let names = [ [chr $ ord 'A' + i] | i <- [0..n-1]]
-  argsIn <- mapM (flip mkInputTuple typ) names
+  let names = [ [chr $ ord 'A' + i] | i <- [0..cargs-1]]
+  argsIn <- mapM (flip mkInputTypedef $ length typ) names
   return $ (argsOut, argsIn)
 
 -- mkLocalAccessors :: Int -> [Type] -> CGM ()

@@ -21,7 +21,6 @@ outType :: Type
 outType = typename "TyOut"
 
 
-
 -- Common device functions
 -- -----------------------
 
@@ -107,7 +106,11 @@ mkPtr (Type (DeclSpec storage quals typ l0) _ l1) =
 mkPtr _ = error "Not a DeclSpec"
 
 data StorageQual = Global | Local
-                 deriving (Eq, Show)
+                 deriving (Eq)
+
+instance Show StorageQual where
+  show Global = "__global"
+  show Local  = "__local"
 
 changeStorage :: StorageQual -> Type -> Type
 changeStorage stor (Type (DeclSpec storage quals typ l0) _ l1) =

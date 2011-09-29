@@ -37,10 +37,10 @@ import Data.Array.Accelerate.OpenCL.CodeGen.Monad
 -- Exported functions
 -- ------------------
 mkFold :: ([C.Type],Int) -> C.Exp -> C.Exp -> CUTranslSkel
-mkFold ty identity apply = makeFold False ty (Just identity) apply
+mkFold (ty, dimIn) identity apply = makeFold True (ty, dimIn) (Just identity) apply
 
 mkFold1 :: ([C.Type],Int) -> C.Exp -> CUTranslSkel
-mkFold1 ty apply = makeFold True ty Nothing apply
+mkFold1 (ty, dimIn) apply = makeFold False (ty, dimIn) Nothing apply
 
 
 
@@ -48,34 +48,42 @@ mkFold1 ty apply = makeFold True ty Nothing apply
 -- ---------
 
 makeFold :: Bool -> ([C.Type],Int) -> Maybe C.Exp -> C.Exp -> CUTranslSkel
-makeFold inclusive (ty, dim) identity apply = runCGM $ do
+makeFold inclusive (ty, dimIn) identity apply = runCGM $ do
   (d_out, d_inA : _) <- mkTupleTypeAsc 1 ty
+  (d_local,local_params) <- mkParameterList Local (Just "local") n tynames
   fromMaybe (return ()) (mkIdentity <$> identity)
   mkApplyAsc 2 apply
-  mkDim "DimInA" dim
-  mkDim "DimOut" (dim-1)
-  let mkSkel | dim == 1  = mkFoldAllSkel
-             | otherwise = mkFoldSkel
-  mkSkel d_out d_inA inclusive
+  mkDim "DimInA" dimIn
+  mkDim "DimOut" (dimIn-1)
+  let mkSkel | dimIn == 1 = mkFoldAllSkel
+             | otherwise  = mkFoldSkel
+  mkSkel d_out d_inA (d_local, local_params) inclusive
+    where
+      n = length ty
+      tynames
+        | n > 1     = take n ["TyOut" ++ "_" ++ show i | i <- [0..]]
+        | otherwise = ["TyOut"]
 
-mkFoldSkel :: Arguments -> Arguments -> Bool -> CGM ()
+
+mkFoldSkel :: Arguments -> Arguments -> (Arguments, [C.Param]) -> Bool -> CGM ()
 mkFoldSkel = error "folds for higher dimensions are not yet supported in the OpenCL backend for Accelerate"
 
-mkFoldAllSkel :: Arguments -> Arguments -> Bool -> CGM ()
-mkFoldAllSkel d_out d_inA inclusive = do
+mkFoldAllSkel :: Arguments -> Arguments -> (Arguments, [C.Param]) -> Bool -> CGM ()
+mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
   ps <- getParams
 
   mkHandleSeed d_out inclusive
-
-  let include = "#include <reduce.cl>"
-  addDefinitions [cunit| $esc:include |]
+  
+  mkWarpReduce local_params d_local
+  mkBlockReduce local_params d_local
 
   addDefinitions
     [cunit|
         __kernel void fold (const typename Ix shape,
-                            $params:ps) {
+                            $params:ps,
+                            $params:local_params) {
 
-             volatile __local typename TyOut s_data[100];
+             //volatile __local typename TyOut s_data[100];
              //__global ArrOutTy *s_data = partition(s_ptr, get_local_size(0));
 
              /*
@@ -94,8 +102,7 @@ mkFoldAllSkel d_out d_inA inclusive = do
               *
               * The loop stride of `gridSize' is used to maintain coalescing.
               */
-             if (i < shape)
-             {
+             if (i < shape) {
                  sum = getA(i, $args:d_inA);
                  for (i += gridSize; i < shape; i += gridSize)
                      sum = apply(sum, getA(i, $args:d_inA));
@@ -105,20 +112,73 @@ mkFoldAllSkel d_out d_inA inclusive = do
               * Each thread puts its local sum into shared memory, then threads
               * cooperatively reduce the shared array to a single value.
               */
-             set_local(tid, sum, s_data);
+             set_local(tid, sum, $args:d_local);
              barrier(CLK_LOCAL_MEM_FENCE);
-             sum = reduce_block_n(s_data, sum, min(shape, blockSize));
+             sum = reduce_block_n(sum, min(shape, blockSize), $args:d_local);
 
              /*
               * Write the results of this block back to global memory. If we are the last
               * phase of a recursive multi-block reduction, include the seed element.
               */
 
-             if (tid == 0)
-             {
-               handleSeed(sum, $args:d_out, $args:d_inA);
+             if (tid == 0) {
+               handleSeed(shape, sum, $args:d_out, $args:d_inA);
              }
          }
+    |]
+
+-- | Cooperatively reduce a single warp's segment of an array to a single value
+mkWarpReduce :: [C.Param] -> Arguments -> CGM ()
+mkWarpReduce ps args = do
+  addDefinitions $
+    [cunit|
+       inline typename TyOut reduce_warp_n (typename TyOut sum,
+                                            typename Ix n,
+                                            $params:ps) {
+         int warpSize = 32;
+         const typename Ix tid  = get_local_id(0);
+         const typename Ix lane = get_local_id(0) & (warpSize - 1);
+
+         if (n > 16 && lane + 16 < n) { sum = apply(sum, getA_local(tid+16, $args:args)); set_local(tid, sum, $args:args); }
+         if (n >  8 && lane +  8 < n) { sum = apply(sum, getA_local(tid+ 8, $args:args)); set_local(tid, sum, $args:args); }
+         if (n >  4 && lane +  4 < n) { sum = apply(sum, getA_local(tid+ 4, $args:args)); set_local(tid, sum, $args:args); }
+         if (n >  2 && lane +  2 < n) { sum = apply(sum, getA_local(tid+ 2, $args:args)); set_local(tid, sum, $args:args); }
+         if (n >  1 && lane +  1 < n) { sum = apply(sum, getA_local(tid+ 1, $args:args)); }
+         return sum;
+       }
+    |]
+
+-- | Block reduction to a single value
+mkBlockReduce :: [C.Param] -> Arguments -> CGM ()
+mkBlockReduce ps args = do
+  addDefinitions $
+    [cunit|
+       inline typename TyOut reduce_block_n(typename TyOut sum,
+                                            typename Ix n,
+                                            $params:ps) {
+         const typename Ix tid = get_local_id(0);
+         if (n > 512) { if (tid < 512 && tid + 512 < n) { sum = apply(sum, getA_local(tid+512, $args:args)); set_local(tid, sum, $args:args); } }
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n > 256) { if (tid < 256 && tid + 256 < n) { sum = apply(sum, getA_local(tid+256, $args:args)); set_local(tid, sum, $args:args); } }
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n > 128) { if (tid < 128 && tid + 128 < n) { sum = apply(sum, getA_local(tid+128, $args:args)); set_local(tid, sum, $args:args); } }
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  64) { if (tid <  64 && tid +  64 < n) { sum = apply(sum, getA_local(tid+ 64, $args:args)); set_local(tid, sum, $args:args); } }
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  32) { if (tid <  32 && tid +  32 < n) { sum = apply(sum, getA_local(tid+ 32, $args:args)); set_local(tid, sum, $args:args); }}
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  16) { if (tid <  16 && tid +  16 < n) { sum = apply(sum, getA_local(tid+ 16, $args:args)); set_local(tid, sum, $args:args); }}
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  8) { if (tid <  8 && tid +     8 < n) { sum = apply(sum, getA_local(tid+  8, $args:args)); set_local(tid, sum, $args:args); }}
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  4) { if (tid <  4 && tid +     4 < n) { sum = apply(sum, getA_local(tid+  4, $args:args)); set_local(tid, sum, $args:args); }}
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  2) { if (tid <  2 && tid +     2 < n) { sum = apply(sum, getA_local(tid+  2, $args:args)); set_local(tid, sum, $args:args); }}
+         barrier(CLK_LOCAL_MEM_FENCE);
+         if (n >  1) { if (tid == 0 && tid +     1 < n) { sum = apply(sum, getA_local(tid+  1, $args:args)); }}
+
+         return sum;
+       }
     |]
 
 
@@ -127,7 +187,8 @@ mkHandleSeed d_out False = do
   ps <- getParams
   addDefinitions
     [cunit|
-      inline void handleSeed(typename TyOut sum,
+      inline void handleSeed(const typename Ix shape,
+                             typename TyOut sum,
                              $params:ps)
       {
           typename Ix blockIdx = (get_global_id(0)-get_local_id(0)) / get_local_size(0);
@@ -138,7 +199,8 @@ mkHandleSeed d_out True = do
   ps <- getParams
   addDefinitions
     [cunit|
-      inline void handleSeed(typename TyOut sum,
+      inline void handleSeed(const typename Ix shape,
+                             typename TyOut sum,
                              $params:ps)
       {
           typename Ix blockIdx = (get_global_id(0)-get_local_id(0)) / get_local_size(0);
