@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns, CPP, GADTs, ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes, TupleSections, TypeOperators, TypeSynonymInstances #-}
+{-# LANGUAGE RankNTypes, TupleSections, TypeOperators, TypeSynonymInstances, 
+             FlexibleInstances #-}
 -- |
 -- Module      : Data.Array.Accelerate.OpenCL.Execute
 -- Copyright   : [2008..2011] Manuel M T Chakravarty, Gabriele Keller, Sean Lee, Trevor L. McDonell
@@ -373,7 +374,7 @@ foldOp c kernel bindings acc aenv (Array sh0 in0)
   | dim sh0 == 1 = do
       cfg@(_,_,(_,g,_)) <- configure kernel acc (size sh0)
       res@(Array _ out) <- newArray (bool c 1 (g > 1)) (toElt (fst sh0,g)) :: CIO (Array (dim:.Int) e)
-      dispatch cfg bindings aenv (((((),size sh0),out),in0), OpenCL.LocalArrayArg (undefined :: Int) (size sh0))
+      dispatch cfg bindings aenv (((((),size sh0),out),in0), LocalArray out (size sh0))
       freeArray in0
       if g > 1 then foldOp c kernel bindings acc aenv res
                else return (Array (fst sh0) out)
@@ -705,6 +706,39 @@ instance Storable a => Marshalable [a] where
 
 instance (Marshalable a, Marshalable b) => Marshalable (a,b) where
   marshal (a,b) = (++) <$> marshal a <*> marshal b
+
+
+
+-- With OpenCL, all arrays must be allocated outside the kernels
+-- This includes, __local (shared memory) arrays.
+-- Use this type to specify that a kernel needs a local array of the given size.
+data Marshalable a => LocalArray a = LocalArray a Int
+
+instance (Marshalable a, Marshalable b,
+          Marshalable (LocalArray a), Marshalable (LocalArray b)) 
+            => Marshalable (LocalArray (a,b)) where
+  marshal (LocalArray (x1, x2) n) = (++) <$> marshal (LocalArray x1 n)
+                                         <*> marshal (LocalArray x2 n)
+
+instance AD.ArrayElt e => Marshalable (LocalArray (AD.ArrayData e)) where
+  marshal (LocalArray e n) = marshalLocalArray n e
+
+
+-- #define primLocalMarshalable(ty)                                              \
+-- instance Marshalable (LocalArray ty) where                                    \
+--   marshal (LocalArray x n) = return $ [OpenCL.LocalArrayArg x n]
+
+-- primLocalMarshalable(Int8)
+-- primLocalMarshalable(Int16)
+-- primLocalMarshalable(Int32)
+-- primLocalMarshalable(Int64)
+-- primLocalMarshalable(Word8)
+-- primLocalMarshalable(Word16)
+-- primLocalMarshalable(Word32)
+-- primLocalMarshalable(Word64)
+-- primLocalMarshalable(Float)
+-- primLocalMarshalable(Double)
+-- primLocalMarshalable((Ptr a))
 
 
 -- Link the binary object implementing the computation, configure the kernel

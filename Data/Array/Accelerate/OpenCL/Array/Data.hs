@@ -17,7 +17,7 @@ module Data.Array.Accelerate.OpenCL.Array.Data (
 --  indexArray, copyArray,
   peekArray, pokeArray,
 --  peekArrayAsync, pokeArrayAsync,
-  marshalArrayData,
+  marshalArrayData, marshalLocalArray,
 --  marshalTextureData,
   existsArrayData, devicePtrs,
 
@@ -209,6 +209,29 @@ marshalArrayData adata = doMarshal AD.arrayElt adata
         { doMarshalPrim :: ArrayEltR e -> AD.ArrayData e -> CIO [OpenCL.KernelArg]
         mkPrimDispatch(doMarshalPrim,marshalArrayDataPrim)
         }
+
+-- |Wrap the device pointers corresponding to a host-side array into arguments that can be passed
+-- to a kernel upon invocation.
+--
+marshalLocalArray :: AD.ArrayElt e => Int -> AD.ArrayData e -> CIO [OpenCL.KernelArg]
+marshalLocalArray n adata = doMarshal AD.arrayElt adata
+  where
+    doMarshal :: ArrayEltR e -> AD.ArrayData e -> CIO [OpenCL.KernelArg]
+    doMarshal ArrayEltRunit             _  = return []
+    doMarshal (ArrayEltRpair aeR1 aeR2) ad = (++) <$> doMarshal aeR1 (fst' ad)
+                                                  <*> doMarshal aeR2 (snd' ad)
+    doMarshal aer                       ad = doMarshalPrim aer ad n
+      where
+          doMarshalPrim :: ArrayEltR e -> AD.ArrayData e -> Int -> CIO [OpenCL.KernelArg]
+          doMarshalPrim ArrayEltRint    _ = marshalLocalArrayPrim (undefined :: Int)
+          doMarshalPrim ArrayEltRint8   _ = marshalLocalArrayPrim (undefined :: Int8)
+          doMarshalPrim ArrayEltRint16  _ = marshalLocalArrayPrim (undefined :: Int16)
+          doMarshalPrim ArrayEltRint32  _ = marshalLocalArrayPrim (undefined :: Int32)
+          doMarshalPrim ArrayEltRint64  _ = marshalLocalArrayPrim (undefined :: Int64)
+          doMarshalPrim ArrayEltRfloat  _ = marshalLocalArrayPrim (undefined :: Float)
+          doMarshalPrim ArrayEltRdouble _ = marshalLocalArrayPrim (undefined :: Double)
+          doMarshalPrim _ _ = error "marshalling local (shared memory) array is errorneous"
+
 
 -- -- |Bind the device memory arrays to the given texture reference(s), setting
 -- -- appropriate type. The arrays are bound, and the list of textures thereby
@@ -502,6 +525,12 @@ marshalArrayDataPrim :: ( AD.ArrayElt e, AD.ArrayPtrs e ~ Ptr a, DevicePtrs e ~ 
                      => AD.ArrayData e
                      -> CIO [OpenCL.KernelArg]
 marshalArrayDataPrim ad = return . OpenCL.MObjArg <$> getArray ad
+
+marshalLocalArrayPrim :: Storable e =>
+                         e
+                      -> Int
+                      -> CIO [OpenCL.KernelArg]
+marshalLocalArrayPrim x n = return $ [OpenCL.LocalArrayArg x n]
 
 
 -- -- Bind device memory to the given texture reference, setting appropriate type
