@@ -135,10 +135,10 @@ executeOpenAcc (ExecAcc count kernel bindings acc) aenv =
       if cond then executeOpenAcc t aenv
               else executeOpenAcc e aenv
 
-    -- Reshape e a -> do
-    --   ix <- executeExp e aenv
-    --   a0 <- executeOpenAcc a aenv
-    --   reshapeOp c ix a0
+    Reshape e a -> do
+      ix <- executeExp e aenv
+      a0 <- executeOpenAcc a aenv
+      reshapeOp c ix a0
 
     Unit e ->
       unitOp c =<< executeExp e aenv
@@ -154,10 +154,10 @@ executeOpenAcc (ExecAcc count kernel bindings acc) aenv =
       a0   <- executeOpenAcc a aenv
       replicateOp c kernel bindings acc aenv sliceIndex slix a0
 
-    -- Index sliceIndex a e -> do
-    --   slix <- executeExp e aenv
-    --   a0   <- executeOpenAcc a aenv
-    --   indexOp c kernel bindings acc aenv sliceIndex a0 slix
+    Index sliceIndex a e -> do
+      slix <- executeExp e aenv
+      a0   <- executeOpenAcc a aenv
+      indexOp c kernel bindings acc aenv sliceIndex a0 slix
 
     Map _ a             -> do
       a0 <- executeOpenAcc a aenv
@@ -352,7 +352,7 @@ zipWithOp :: Elt c
           -> CIO (Array dim c)
 zipWithOp c kernel bindings acc aenv (Array sh1 in1) (Array sh0 in0) = do
   res@(Array sh out) <- newArray c $ toElt (sh1 `intersect` sh0)
-  execute kernel bindings acc aenv (size sh) (((((((), convertIx sh),convertIx sh1),convertIx sh0), out), in1), in0)
+  execute kernel bindings acc aenv (size sh) (((((((), convertIx sh),convertIx sh1),convertIx sh0), out), in0), in1)
   freeArray in1
   freeArray in0
   return res
@@ -722,24 +722,6 @@ instance (Marshalable a, Marshalable b,
 
 instance AD.ArrayElt e => Marshalable (LocalArray (AD.ArrayData e)) where
   marshal (LocalArray e n) = marshalLocalArray n e
-
-
--- #define primLocalMarshalable(ty)                                              \
--- instance Marshalable (LocalArray ty) where                                    \
---   marshal (LocalArray x n) = return $ [OpenCL.LocalArrayArg x n]
-
--- primLocalMarshalable(Int8)
--- primLocalMarshalable(Int16)
--- primLocalMarshalable(Int32)
--- primLocalMarshalable(Int64)
--- primLocalMarshalable(Word8)
--- primLocalMarshalable(Word16)
--- primLocalMarshalable(Word32)
--- primLocalMarshalable(Word64)
--- primLocalMarshalable(Float)
--- primLocalMarshalable(Double)
--- primLocalMarshalable((Ptr a))
-
 
 -- Link the binary object implementing the computation, configure the kernel
 -- launch parameters, and initiate the computation. This also handles lifting
