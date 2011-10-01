@@ -423,25 +423,25 @@ codeGenPrim (PrimBRotateL         _) [a,b] = ccall "rotateL" [a,b]
 codeGenPrim (PrimBRotateR         _) [a,b] = ccall "rotateR" [a,b]
 codeGenPrim (PrimFDiv             _) [a,b] = [cexp|$exp:a / $exp:b|]
 codeGenPrim (PrimRecip           ty) [a]   = codeGenRecip ty a
-codeGenPrim (PrimSin             ty) [a]   = ccall (FloatingNumType ty `postfix` "sin")   [a]
-codeGenPrim (PrimCos             ty) [a]   = ccall (FloatingNumType ty `postfix` "cos")   [a]
-codeGenPrim (PrimTan             ty) [a]   = ccall (FloatingNumType ty `postfix` "tan")   [a]
-codeGenPrim (PrimAsin            ty) [a]   = ccall (FloatingNumType ty `postfix` "asin")  [a]
-codeGenPrim (PrimAcos            ty) [a]   = ccall (FloatingNumType ty `postfix` "acos")  [a]
-codeGenPrim (PrimAtan            ty) [a]   = ccall (FloatingNumType ty `postfix` "atan")  [a]
-codeGenPrim (PrimAsinh           ty) [a]   = ccall (FloatingNumType ty `postfix` "asinh") [a]
-codeGenPrim (PrimAcosh           ty) [a]   = ccall (FloatingNumType ty `postfix` "acosh") [a]
-codeGenPrim (PrimAtanh           ty) [a]   = ccall (FloatingNumType ty `postfix` "atanh") [a]
-codeGenPrim (PrimExpFloating     ty) [a]   = ccall (FloatingNumType ty `postfix` "exp")   [a]
-codeGenPrim (PrimSqrt            ty) [a]   = ccall (FloatingNumType ty `postfix` "sqrt")  [a]
-codeGenPrim (PrimLog             ty) [a]   = ccall (FloatingNumType ty `postfix` "log")   [a]
-codeGenPrim (PrimFPow            ty) [a,b] = ccall (FloatingNumType ty `postfix` "pow")   [a,b]
+codeGenPrim (PrimSin             ty) [a]   = ccall "sin"   [a]
+codeGenPrim (PrimCos             ty) [a]   = ccall "cos"   [a]
+codeGenPrim (PrimTan             ty) [a]   = ccall "tan"   [a]
+codeGenPrim (PrimAsin            ty) [a]   = ccall "asin"  [a]
+codeGenPrim (PrimAcos            ty) [a]   = ccall "acos"  [a]
+codeGenPrim (PrimAtan            ty) [a]   = ccall "atan"  [a]
+codeGenPrim (PrimAsinh           ty) [a]   = ccall "asinh" [a]
+codeGenPrim (PrimAcosh           ty) [a]   = ccall "acosh" [a]
+codeGenPrim (PrimAtanh           ty) [a]   = ccall "atanh" [a]
+codeGenPrim (PrimExpFloating     ty) [a]   = ccall "exp"   [a]
+codeGenPrim (PrimSqrt            ty) [a]   = ccall "sqrt"  [a]
+codeGenPrim (PrimLog             ty) [a]   = ccall "log"   [a]
+codeGenPrim (PrimFPow            ty) [a,b] = ccall "pow"   [a,b]
 codeGenPrim (PrimLogBase         ty) [a,b] = codeGenLogBase ty a b
 codeGenPrim (PrimTruncate     ta tb) [a]   = codeGenTruncate ta tb a
 codeGenPrim (PrimRound        ta tb) [a]   = codeGenRound ta tb a
 codeGenPrim (PrimFloor        ta tb) [a]   = codeGenFloor ta tb a
 codeGenPrim (PrimCeiling      ta tb) [a]   = codeGenCeiling ta tb a
-codeGenPrim (PrimAtan2           ty) [a,b] = ccall (FloatingNumType ty `postfix` "atan2") [a,b]
+codeGenPrim (PrimAtan2           ty) [a,b] = ccall "atan2" [a,b]
 codeGenPrim (PrimLt               _) [a,b] = [cexp|$exp:a < $exp:b|]
 codeGenPrim (PrimGt               _) [a,b] = [cexp|$exp:a > $exp:b|]
 codeGenPrim (PrimLtEq             _) [a,b] = [cexp|$exp:a <= $exp:b|]
@@ -523,8 +523,8 @@ codeGenMaxBound (NonNumBoundedType   ty)
 -- Methods from Num, Floating, Fractional and RealFrac
 
 codeGenAbs :: NumType a -> C.Exp -> C.Exp
-codeGenAbs ty@(IntegralNumType _) x = ccall (ty `postfix` "abs")  [x]
-codeGenAbs ty@(FloatingNumType _) x = ccall (ty `postfix` "fabs") [x]
+codeGenAbs ty@(IntegralNumType _) x = ccall "abs"  [x]
+codeGenAbs ty@(FloatingNumType _) x = ccall "fabs" [x]
 
 -- TODO investigate whether codeGenScalar should be necessary
 codeGenSig :: NumType a -> C.Exp -> C.Exp
@@ -545,20 +545,20 @@ codeGenRecip ty x | FloatingDict <- floatingDict ty
     in [cexp| $exp:a / $exp:x |]
 
 codeGenLogBase :: FloatingType a -> C.Exp -> C.Exp -> C.Exp
-codeGenLogBase ty x y = let a = ccall (FloatingNumType ty `postfix` "log") [x]
-                            b = ccall (FloatingNumType ty `postfix` "log") [y]
+codeGenLogBase ty x y = let a = ccall "log" [x]
+                            b = ccall "log" [y]
                         in [cexp| $exp:b / $exp:a |]
 
 codeGenMin :: ScalarType a -> C.Exp -> C.Exp -> C.Exp
-codeGenMin (NumScalarType ty@(IntegralNumType _)) a b = ccall (ty `postfix` "min")  [a,b]
-codeGenMin (NumScalarType ty@(FloatingNumType _)) a b = ccall (ty `postfix` "fmin") [a,b]
+codeGenMin (NumScalarType ty@(IntegralNumType _)) a b = ccall "min"  [a,b]
+codeGenMin (NumScalarType ty@(FloatingNumType _)) a b = ccall "fmin" [a,b]
 codeGenMin (NonNumScalarType _)                   a b =
   let ty = NumScalarType (IntegralNumType (TypeInt32 (undefined :: IntegralDict Int32)))
   in  codeGenMin ty (ccast ty a) (ccast ty b)
 
 codeGenMax :: ScalarType a -> C.Exp -> C.Exp -> C.Exp
-codeGenMax (NumScalarType ty@(IntegralNumType _)) a b = ccall (ty `postfix` "max")  [a,b]
-codeGenMax (NumScalarType ty@(FloatingNumType _)) a b = ccall (ty `postfix` "fmax") [a,b]
+codeGenMax (NumScalarType ty@(IntegralNumType _)) a b = ccall "max"  [a,b]
+codeGenMax (NumScalarType ty@(FloatingNumType _)) a b = ccall "fmax" [a,b]
 codeGenMax (NonNumScalarType _)                   a b =
   let ty = NumScalarType (IntegralNumType (TypeInt32 (undefined :: IntegralDict Int32)))
   in  codeGenMax ty (ccast ty a) (ccast ty b)
@@ -581,22 +581,22 @@ codeGenFromIntegral _ ty = ccast (NumScalarType ty)
 codeGenTruncate :: FloatingType a -> IntegralType b -> C.Exp -> C.Exp
 codeGenTruncate ta tb x
   = ccast (NumScalarType (IntegralNumType tb))
-  $ ccall (FloatingNumType ta `postfix` "trunc") [x]
+  $ ccall "trunc" [x]
 
 codeGenRound :: FloatingType a -> IntegralType b -> C.Exp -> C.Exp
 codeGenRound ta tb x
   = ccast (NumScalarType (IntegralNumType tb))
-  $ ccall (FloatingNumType ta `postfix` "round") [x]
+  $ ccall "round" [x]
 
 codeGenFloor :: FloatingType a -> IntegralType b -> C.Exp -> C.Exp
 codeGenFloor ta tb x
   = ccast (NumScalarType (IntegralNumType tb))
-  $ ccall (FloatingNumType ta `postfix` "floor") [x]
+  $ ccall "floor" [x]
 
 codeGenCeiling :: FloatingType a -> IntegralType b -> C.Exp -> C.Exp
 codeGenCeiling ta tb x
   = ccast (NumScalarType (IntegralNumType tb))
-  $ ccall (FloatingNumType ta `postfix` "ceil") [x]
+  $ ccall "ceil" [x]
 
 
 -- Auxiliary Functions
@@ -605,9 +605,4 @@ codeGenCeiling ta tb x
 ccast :: ScalarType a -> C.Exp -> C.Exp
 ccast ty x = [cexp|($ty:t) $exp:x|]
   where t = codeGenScalarType ty
-
-postfix :: NumType a -> String -> String
-postfix (FloatingNumType (TypeFloat  _)) = (++ "f")
-postfix (FloatingNumType (TypeCFloat _)) = (++ "f")
-postfix _                                = id
 
