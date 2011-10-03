@@ -45,15 +45,16 @@ mkInputTuple subscript = mkTupleType (Just subscript)
 mkOutputTuple :: [Type]-> CGM Arguments
 mkOutputTuple = mkTupleType Nothing
 
+ -- ..., TyInA_1, TyInA_0
+createTypenames name n | n > 1     = reverse $ take n [name ++ "_" ++ show i | i <- [0..]]
+                       | otherwise = [name]
+
 mkTupleType :: Maybe String -> [Type] -> CGM Arguments
 mkTupleType subscript types = do
   let n = length types
       tuple_name = maybe "TyOut" ("TyIn" ++) subscript
-      volatile = isNothing subscript
-      tynames
-        | n > 1     = take n [tuple_name ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
-        | otherwise = [tuple_name]
-
+      volatile = False --isNothing subscript
+      tynames = createTypenames tuple_name n
   addDefinitions $ zipWith (mkTypedef volatile) tynames types
   when (n > 1) $ addDefinition (mkStruct tuple_name volatile $ map typename tynames)
   (args,ps) <- mkParameterList Global subscript n tynames
@@ -66,13 +67,8 @@ mkTupleType subscript types = do
 mkInputTypedef :: String -> Int -> CGM Arguments
 mkInputTypedef subscript n = do
   let tuple_name = "TyIn" ++ subscript
-      tynames_in
-        | n > 1     = take n [tuple_name ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
-        | otherwise = [tuple_name]
-      tynames_out
-        | n > 1     = take n ["TyOut" ++ "_" ++ show i | i <- [0..]] -- TyInA_0, TyInA_1, ...
-        | otherwise = ["TyOut"]
-
+      tynames_in = createTypenames tuple_name n
+      tynames_out = createTypenames "TyOut" n
   addDefinitions $ zipWith (mkTypedef True) tynames_in $ map typename tynames_out
   when (n > 1) $ addDefinition $ mkTypedef False tuple_name (typename "TyOut")
   (args,ps) <- mkParameterList Global (Just subscript) n tynames_in
@@ -106,9 +102,7 @@ mkParameterList storage subscript n tynames = do
   return (args, ps)
    where
     param_prefix = maybe "out" ("in" ++) subscript
-    param_names
-      | n > 1     = take n [param_prefix ++ "_" ++ show i | i <- [0..]] -- inA_0, inB_0, ..
-      | otherwise = [param_prefix] -- inA or out
+    param_names = createTypenames param_prefix n
     types' = map (mkPtr . changeStorage storage . typename) tynames
 
     args = map (\p -> [cexp|$id:p|]) param_names

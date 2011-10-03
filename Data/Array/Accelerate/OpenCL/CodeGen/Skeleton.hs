@@ -93,8 +93,8 @@ mkZipWith :: ([C.Type], Int)
 mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
   runCGM $ do
     d_out <- mkOutputTuple tyOut
-    d_inA <- mkInputTuple "A" tyInA
     d_inB <- mkInputTuple "B" tyInB
+    d_inA <- mkInputTuple "A" tyInA
     mkApply 2 apply
 
     mkDim "DimOut" dimOut
@@ -116,6 +116,7 @@ mkZipWith (tyOut,dimOut) (tyInB, dimInB) (tyInA, dimInA) apply =
              typename Ix iB = $id:(toIndex dimInA)(shInA, $id:(fromIndex dimInA)(shOut, ix));
 
              typename TyOut val = apply(getB(iB, $args:d_inB), getA(iA, $args:d_inA)) ;
+
              set(ix, val, $args:d_out) ;
            }
          }

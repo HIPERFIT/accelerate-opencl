@@ -352,7 +352,7 @@ zipWithOp :: Elt c
           -> CIO (Array dim c)
 zipWithOp c kernel bindings acc aenv (Array sh1 in1) (Array sh0 in0) = do
   res@(Array sh out) <- newArray c $ toElt (sh1 `intersect` sh0)
-  execute kernel bindings acc aenv (size sh) (((((((), convertIx sh),convertIx sh1),convertIx sh0), out), in0), in1)
+  execute kernel bindings acc aenv (size sh) (((((((), convertIx sh),convertIx sh1),convertIx sh0), out), in1), in0)
   freeArray in1
   freeArray in0
   return res
