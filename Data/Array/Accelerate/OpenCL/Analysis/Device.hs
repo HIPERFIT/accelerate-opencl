@@ -28,7 +28,7 @@ import Foreign.OpenCL.Bindings
 selectBestPlatform :: IO (PlatformID, [DeviceID])
 selectBestPlatform = do
   platforms <- getPlatformIDs
-  devices <- mapM (getDeviceIDs DeviceTypeAll) platforms
+  devices <- mapM (getDeviceIDs [DeviceTypeAll]) platforms
   maxFlops <- mapM (liftM sum . mapM deviceFlops) devices :: IO [Word32]
   let (platform, devs, _) = head . sortWith third $ zip3 platforms devices maxFlops
   return (platform, devs)

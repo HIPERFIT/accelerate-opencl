@@ -178,7 +178,7 @@ loadIndexFile = (,0) <$> Hash.new (==) hashAccKey
 initialise :: IO OpenCLState
 initialise = do
   (platform, devices) <- selectBestPlatform
-  context <- createContext devices [ContextPlatform platform]
+  context <- createContext devices [ContextPlatform platform] NoContextCallback
   queues <- mapM (flip (createCommandQueue context) [QueueOutOfOrderExecModeEnable]) devices
   (knl, u) <- loadIndexFile
   return $ OpenCLState
