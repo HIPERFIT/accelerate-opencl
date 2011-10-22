@@ -29,7 +29,8 @@ instance Show CUTranslSkel where
       ++ (unlines $ map show code)
 
 header :: String
-header = "#pragma OPENCL EXTENSION cl_amd_printf : enable\n\n"
+header = "#pragma OPENCL EXTENSION cl_amd_printf : enable\n"
+      ++ "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n"
       ++ include "accelerate_opencl_shape.h"
 
 
