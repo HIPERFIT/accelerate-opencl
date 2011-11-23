@@ -61,7 +61,9 @@ Library
                         Data.Array.Accelerate.OpenCL.CodeGen.Reduce
                         Data.Array.Accelerate.OpenCL.Analysis.Hash
                         Data.Array.Accelerate.OpenCL.Analysis.Device
+                        Data.Array.Accelerate.OpenCL.Analysis.Launch
                         Data.Array.Accelerate.OpenCL.Array.Data
+                        Data.Array.Accelerate.OpenCL.Config
                         Data.Array.Accelerate.OpenCL.State
                         Data.Array.Accelerate.OpenCL.Compile
                         Data.Array.Accelerate.OpenCL.Execute
