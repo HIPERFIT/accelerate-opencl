@@ -36,7 +36,7 @@ import Data.Array.Accelerate.OpenCL.State
 import Data.Array.Accelerate.OpenCL.Compile
 import Data.Array.Accelerate.OpenCL.CodeGen
 import Data.Array.Accelerate.OpenCL.Array.Data
---import Data.Array.Accelerate.OpenCL.Analysis.Launch
+import Data.Array.Accelerate.OpenCL.Analysis.Launch (launchConfig)
 
 -- libraries
 import Prelude                                                  hiding (sum)
@@ -372,9 +372,9 @@ foldOp c kernel bindings acc aenv (Array sh0 in0)
   --      case, which probably breaks reference counting.
   --
   | dim sh0 == 1 = do
-      cfg@(_,_,(_,g,_)) <- configure kernel acc (size sh0)
-      res@(Array _ out) <- newArray (bool c 1 (g > 1)) (toElt (fst sh0,g)) :: CIO (Array (dim:.Int) e)
-      dispatch cfg bindings aenv (((((),size sh0),out),in0), LocalArray out (size sh0))
+      cfg@(_,_,(blockSize,g,_)) <- configure kernel acc (size sh0)
+      res@(Array _ out) <- newArray (bool c 1 (g > 1)) (toElt (fst sh0, g `div` blockSize)) :: CIO (Array (dim:.Int) e)
+      dispatch cfg bindings aenv (((((),size sh0),out),in0), LocalArray out blockSize)
       freeArray in0
       if g > 1 then foldOp c kernel bindings acc aenv res
                else return (Array (fst sh0) out)
@@ -383,7 +383,7 @@ foldOp c kernel bindings acc aenv (Array sh0 in0)
   --
   | otherwise    = do
       res@(Array sh out) <- newArray c $ toElt (fst sh0)
-      execute kernel bindings acc aenv (size (fst sh0)) (((((),out),in0),convertIx sh),convertIx sh0)
+      execute kernel bindings acc aenv (size (fst sh0)) ((((((),convertIx sh), convertIx sh0), out), in0), LocalArray out (size sh0))
       freeArray in0
       return res
 
@@ -748,7 +748,9 @@ configure :: AccKernel a
 configure (name, program) acc n = do
   mdl <- program
   fun <- liftIO $ OpenCL.createKernel mdl name
-  cfg <- return (n, 0, 0) --launchConfig acc n fun
+  (dev, _) <- head <$> getM cl_devices -- we only execute on one
+                                       -- device currently
+  cfg <- launchConfig dev acc n fun
   return (mdl, fun, cfg)
 
 
@@ -771,19 +773,11 @@ dispatch (mdl, fun, cfg) fvs aenv args = do
 launch :: Marshalable args => (Int,Int,Integer) -> OpenCL.Kernel -> args -> CIO ()
 launch (cta,grid,smem) fn a = do
   args <- marshal a
-  (dev, queue) <- head <$> getM cl_devices
+  (_, queue) <- head <$> getM cl_devices
   liftIO $ do
-    maxWorkGroupSize <- OpenCL.deviceMaxWorkGroupSize dev
-    let workGroups = fromIntegral $ min maxWorkGroupSize (fromIntegral cta)
     OpenCL.setKernelArgs fn args
-    _ <- OpenCL.enqueueNDRangeKernel queue fn [] [workGroups] [workGroups] []
+    _ <- OpenCL.enqueueNDRangeKernel queue fn [] [fromIntegral grid] [fromIntegral cta] []
     return ()
-  -- liftIO $ do
-  --   CUDA.setParams     fn args
-  --   CUDA.setSharedSize fn smem
-  --   CUDA.setBlockShape fn (cta,1,1)
-  --   CUDA.launch        fn (grid,1) Nothing
-
 
 -- Memory management
 -- -----------------

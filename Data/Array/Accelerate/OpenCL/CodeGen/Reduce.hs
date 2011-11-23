@@ -53,20 +53,16 @@ makeFold inclusive (ty, dimIn) identity apply = runCGM $ do
   (d_local,local_params) <- mkParameterList Local (Just "local") n tynames
   fromMaybe (return ()) (mkIdentity <$> identity)
   mkApplyAsc 2 apply
-  mkDim "DimInA" dimIn
   mkDim "DimOut" (dimIn-1)
+  mkDim "DimInA" dimIn
   let mkSkel | dimIn == 1 = mkFoldAllSkel
-             | otherwise  = mkFoldSkel
+             | otherwise  = mkFoldSkel dimIn
   mkSkel d_out d_inA (d_local, local_params) inclusive
     where
       n = length ty
       tynames
         | n > 1     = take n ["TyOut" ++ "_" ++ show i | i <- [0..]]
         | otherwise = ["TyOut"]
-
-
-mkFoldSkel :: Arguments -> Arguments -> (Arguments, [C.Param]) -> Bool -> CGM ()
-mkFoldSkel = error "folds for higher dimensions are not yet supported in the OpenCL backend for Accelerate"
 
 mkFoldAllSkel :: Arguments -> Arguments -> (Arguments, [C.Param]) -> Bool -> CGM ()
 mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
@@ -82,9 +78,6 @@ mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
         __kernel void fold (const typename Ix shape,
                             $params:ps,
                             $params:local_params) {
-
-             //volatile __local typename TyOut s_data[100];
-             //__global ArrOutTy *s_data = partition(s_ptr, get_local_size(0));
 
              /*
               * Calculate first level of reduction reading into shared memory
@@ -113,6 +106,7 @@ mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
               * cooperatively reduce the shared array to a single value.
               */
              set_local(tid, sum, $args:d_local);
+             
              barrier(CLK_LOCAL_MEM_FENCE);
              sum = reduce_block_n(sum, min(shape, blockSize), $args:d_local);
 
@@ -126,6 +120,96 @@ mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
              }
          }
     |]
+
+
+mkFoldSkel :: Int -> Arguments -> Arguments -> (Arguments, [C.Param]) -> Bool -> CGM ()
+mkFoldSkel dimIn d_out d_inA (d_local, local_params) inclusive = do
+  ps <- getParams
+  let dimOut = dimIn - 1
+
+  mkHandleSeedFold d_out inclusive
+  mkWarpReduce local_params d_local
+  mkBlockReduce local_params d_local
+
+  addDefinitions
+    [cunit|
+        __kernel void fold(const typename DimOut shOut,
+                           const typename DimInA shInA,
+                           $params:ps,
+                           $params:local_params) {
+            int warpSize = 32;
+
+            //typename TyOut* s_data = partition($args:d_local, blockDim.x);
+
+            const typename Ix num_elements = $id:(indexHead dimIn)(shInA);
+            const typename Ix num_segments = $id:(size dimOut)(shOut);
+
+            const typename Ix num_vectors  = get_local_size(0) / warpSize * (get_global_size(0) / get_local_size(0));
+            const typename Ix thread_id    = get_global_id(0);
+            const typename Ix vector_id    = thread_id / warpSize;
+            const typename Ix thread_lane  = get_local_id(0) & (warpSize - 1);
+
+            /*
+             * Each warp reduces elements along a projection through an innermost
+             * dimension to a single value
+             */
+            for (typename Ix seg = vector_id; seg < num_segments; seg += num_vectors)
+            {
+
+//            printf("tid: %d, numseg: %d, numvec: %d, seg: %d, globsize: %d, locsize: %d\n",
+//                     thread_id, num_segments, num_vectors, seg, get_global_size(0), get_local_size(0));
+
+
+                const typename Ix    start = seg   * num_elements;
+                const typename Ix    end   = start + num_elements;
+                      typename TyOut sum;
+
+                if (num_elements > warpSize)
+                {
+                    /*
+                     * Ensure aligned access to global memory, and that each thread
+                     * initialises its local sum.
+                     */
+                    typename Ix i = start - (start & (warpSize - 1)) + thread_lane;
+                    if (i >= start)
+                        sum = getA(i, $args:d_inA);
+
+                    if (i + warpSize < end)
+                    {
+                        typename TyOut tmp = getA(i + warpSize, $args:d_inA);
+
+                        if (i >= start) sum = apply(sum, tmp);
+                        else            sum = tmp;
+                    }
+
+                    /*
+                     * Now, iterate along the inner-most dimension collecting a local sum
+                     */
+                    for (i += 2 * warpSize; i < end; i += warpSize)
+                        sum = apply(sum, getA(i, $args:d_inA));
+                }
+                else if (start + thread_lane < end)
+                {
+                    sum = getA(start + thread_lane, $args:d_inA);
+                }
+
+                /*
+                 * Each thread puts its local sum into shared memory, then cooperatively
+                 * reduce the shared array to a single value.
+                 */
+                set_local(get_local_id(0), sum, $args:d_local);
+                sum = reduce_warp_n(sum, min(num_elements, warpSize), $args:d_local);
+
+                /*
+                 * Finally, the first thread writes the result for this segment
+                 */
+                if (thread_lane == 0) {
+                  handleSeed(seg, num_elements, sum, $args:d_out, $args:d_inA);
+                }
+            }
+        }
+    |]
+
 
 -- | Cooperatively reduce a single warp's segment of an array to a single value
 mkWarpReduce :: [C.Param] -> Arguments -> CGM ()
@@ -212,6 +296,34 @@ mkHandleSeed d_out True = do
           }
           else
               set(blockIdx, identity(), $args:d_out);
+      }
+    |]
+
+
+mkHandleSeedFold :: Arguments -> Bool -> CGM ()
+mkHandleSeedFold d_out False = do
+  ps <- getParams
+  addDefinitions
+    [cunit|
+      inline void handleSeed(typename Ix seg,
+                             const typename Ix num_elements,
+                             typename TyOut sum,
+                             $params:ps)
+      {
+          set(seg, sum, $args:d_out);
+      }
+    |]
+mkHandleSeedFold d_out True = do
+  ps <- getParams
+  addDefinitions
+    [cunit|
+      inline void handleSeed(typename Ix seg,
+                             const typename Ix num_elements,
+                             typename TyOut sum,
+                             $params:ps)
+      {
+          sum = num_elements > 0 ? apply(sum, identity()) : identity();
+          set(seg, sum, $args:d_out);
       }
     |]
 

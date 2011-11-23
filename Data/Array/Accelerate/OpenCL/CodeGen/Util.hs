@@ -132,6 +132,12 @@ toIndex dim = "toIndexDIM" ++ show dim
 fromIndex :: Int -> String
 fromIndex dim = "fromIndexDIM" ++ show dim
 
+indexHead :: Int -> String
+indexHead dim = "indexHeadDIM" ++ show dim
+
+indexTail :: Int -> String
+indexTail dim = "indexTailDIM" ++ show dim
+
 size :: Int -> String
 size dim = "sizeDIM" ++ show dim
 
