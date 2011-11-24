@@ -372,12 +372,13 @@ foldOp c kernel bindings acc aenv (Array sh0 in0)
   --      case, which probably breaks reference counting.
   --
   | dim sh0 == 1 = do
-      cfg@(_,_,(blockSize,g,_)) <- configure kernel acc (size sh0)
-      res@(Array _ out) <- newArray (bool c 1 (g > 1)) (toElt (fst sh0, g `div` blockSize)) :: CIO (Array (dim:.Int) e)
+      cfg@(_,_,(blockSize,totalSize,_)) <- configure kernel acc (size sh0)
+      let gridSize = totalSize `div` blockSize
+      res@(Array _ out) <- newArray (bool c 1 (gridSize > 1)) (toElt (fst sh0, gridSize)) :: CIO (Array (dim:.Int) e)
       dispatch cfg bindings aenv (((((),size sh0),out),in0), LocalArray out blockSize)
       freeArray in0
-      if g > 1 then foldOp c kernel bindings acc aenv res
-               else return (Array (fst sh0) out)
+      if gridSize > 1 then foldOp c kernel bindings acc aenv res
+                      else return (Array (fst sh0) out)
   --
   -- Reduction over the innermost dimension of an array (single pass operation)
   --
