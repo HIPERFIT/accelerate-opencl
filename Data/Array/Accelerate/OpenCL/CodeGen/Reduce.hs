@@ -87,6 +87,9 @@ mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
              const typename Ix   gridSize  = get_global_size(0);
              typename Ix    i              = get_global_id(0);
              typename TyOut sum;
+             
+             typename Ix number_of_blocks = gridSize/blockSize;
+             typename Ix block_id = get_global_id(0)/blockSize;
 
              /*
               * Reduce multiple elements per thread. The number is determined by the
@@ -108,13 +111,19 @@ mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
              set_local(tid, sum, $args:d_local);
              
              barrier(CLK_LOCAL_MEM_FENCE);
-             sum = reduce_block_n(sum, min(shape, blockSize), $args:d_local);
+
+             typename Ix n = blockSize;
+             if(block_id == number_of_blocks - 1 && shape % blockSize != 0) {
+               // if last block and not all elements of that block should be included
+               n = shape % blockSize;
+             }
+
+             sum = reduce_block_n(sum, n, $args:d_local);
 
              /*
               * Write the results of this block back to global memory. If we are the last
               * phase of a recursive multi-block reduction, include the seed element.
               */
-
              if (tid == 0) {
                handleSeed(shape, sum, $args:d_out, $args:d_inA);
              }

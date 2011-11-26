@@ -772,12 +772,12 @@ dispatch (mdl, fun, cfg) fvs aenv args = do
 -- parameters. The tuple contains (threads per block, grid size, shared memory)
 --
 launch :: Marshalable args => (Int,Int,Integer) -> OpenCL.Kernel -> args -> CIO ()
-launch (cta,grid,smem) fn a = do
+launch (blockSize,totalSize,smem) fn a = do
   args <- marshal a
   (_, queue) <- head <$> getM cl_devices
   liftIO $ do
     OpenCL.setKernelArgs fn args
-    _ <- OpenCL.enqueueNDRangeKernel queue fn [] [fromIntegral grid] [fromIntegral cta] []
+    _ <- OpenCL.enqueueNDRangeKernel queue fn [] [fromIntegral totalSize] [fromIntegral blockSize] []
     return ()
 
 -- Memory management
