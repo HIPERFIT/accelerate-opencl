@@ -41,7 +41,7 @@ Library
                       , mainland-pretty
                       , srcloc
                       , symbol
-                      , hopencl              == 0.1.*
+                      , hopencl              == 0.2.*
                       , mtl                  == 2.0.*
                       , fclabels             >= 0.9 && < 1.0
                       , bytestring
