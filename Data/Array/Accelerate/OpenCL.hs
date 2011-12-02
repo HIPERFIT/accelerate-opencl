@@ -20,12 +20,7 @@ import System.IO.Unsafe
 
 -- standard library
 import Prelude hiding (catch)
---import Data.Record.Label
---import Control.Exception
 import Control.Applicative
---import System.IO.Unsafe
---import qualified Data.HashTable                   as Hash
-
 
 -- friends
 import Data.Array.Accelerate.AST                  (Arrays(..), ArraysR(..))
@@ -33,11 +28,9 @@ import Data.Array.Accelerate.Smart                (Acc, convertAcc, convertAccFu
 import Data.Array.Accelerate.Array.Representation (size)
 import Data.Array.Accelerate.Array.Sugar          (Array(..))
 import Data.Array.Accelerate.OpenCL.Array.Data
-import Data.Array.Accelerate.OpenCL.State
-import Data.Array.Accelerate.OpenCL.Compile
-import Data.Array.Accelerate.OpenCL.Execute
-
-import Data.Array.Accelerate.OpenCL.CodeGen
+import Data.Array.Accelerate.OpenCL.State (evalOpenCL, CIO)
+import Data.Array.Accelerate.OpenCL.Compile (compileAcc)
+import Data.Array.Accelerate.OpenCL.Execute (executeAcc)
 
 -- | Compile and run a complete embedded array program using the OpenCL backend
 --
