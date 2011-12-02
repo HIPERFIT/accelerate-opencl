@@ -179,7 +179,7 @@ initialise :: IO OpenCLState
 initialise = do
   (platform, devices) <- selectBestPlatform
   context <- createContext devices [ContextPlatform platform] NoContextCallback
-  queues <- mapM (flip (createCommandQueue context) [QueueOutOfOrderExecModeEnable]) devices
+  queues <- mapM (\dev -> queueProps dev >>= createCommandQueue context dev) devices
   (knl, u) <- loadIndexFile
   return $ OpenCLState
     { _unique = u
@@ -189,6 +189,11 @@ initialise = do
     , _kernelTable = knl
     , _memoryTable = error "Memory table not initialized"
     }
+
+queueProps :: DeviceID -> IO [CommandQueueProperties]
+queueProps dev = do
+  supported <- deviceQueueProperties dev
+  return $ intersect supported [QueueOutOfOrderExecModeEnable]
 
 -- | Evaluate a OpenCL array computation under the standard global environment
 --
