@@ -382,11 +382,12 @@ foldOp c kernel bindings acc aenv (Array sh0 in0)
   --
   -- Reduction over the innermost dimension of an array (single pass operation)
   --
-  | otherwise    = do
-      res@(Array sh out) <- newArray c $ toElt (fst sh0)
-      execute kernel bindings acc aenv (size (fst sh0)) ((((((),convertIx sh), convertIx sh0), out), in0), LocalArray out (size sh0))
-      freeArray in0
-      return res
+  | otherwise = INTERNAL_ERROR(error) "prepareAcc" ("Higher order fold's are not yet supported by the OpenCL backend")
+  -- *| otherwise    = do
+  --     res@(Array sh out) <- newArray c $ toElt (fst sh0)
+  --     execute kernel bindings acc aenv (size (fst sh0)) ((((((),convertIx sh), convertIx sh0), out), in0), LocalArray out (size sh0))
+  --     freeArray in0
+  --     return res
 
 foldSegOp :: Shape dim
           => Int

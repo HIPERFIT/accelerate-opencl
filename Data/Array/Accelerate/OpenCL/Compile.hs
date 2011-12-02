@@ -320,89 +320,105 @@ prepareAcc iss rootAcc rootEnv = do
           kernel           <- build "fold" acc var1
           return (ExecAcc singleRef kernel var1 (Fold1 f' a'), env2)
 
-        FoldSeg f e a s -> do
-          (f', env1, var1) <- travF f aenv []
-          (e', env2, var2) <- travE e env1 var1
-          (a', env3)       <- travA a env2
-          (s', env4)       <- travA (scan s) env3
-          kernel           <- build "foldSeg" acc var2
-          return (ExecAcc singleRef kernel var2 (FoldSeg f' e' a' s'), env4)
+        FoldSeg _ _ _ _    -> notSupported "foldSeg"
+        Fold1Seg _ _ _     -> notSupported "fold1Seg"
+        Scanl _ _ _        -> notSupported "scanl"
+        Scanl' _ _ _       -> notSupported "scanl'"
+        Scanr _ _ _        -> notSupported "scanr"
+        Scanr' _ _ _       -> notSupported "scanr'"
+        Scanr1 _ _         -> notSupported "scanr1"
+        Stencil _ _ _      -> notSupported "stencil"
+        Stencil2 _ _ _ _ _ -> notSupported "stencil2"
+        Permute _ _ _ _    -> notSupported "permute"
+        Backpermute _ _ _  -> notSupported "backpermute"
 
-        Fold1Seg f a s -> do
-          (f', env1, var1) <- travF f aenv []
-          (a', env2)       <- travA a env1
-          (s', env3)       <- travA (scan s) env2
-          kernel           <- build "foldSeg" acc var1
-          return (ExecAcc singleRef kernel var1 (Fold1Seg f' a' s'), env3)
+        -- Permute f a g b -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (g', env2, var2) <- travF g env1 var1
+        --   (a', env3)       <- travA a env2
+        --   (b', env4)       <- travA b env3
+        --   kernel           <- build "permute" acc var2
+        --   return (ExecAcc singleRef kernel var2 (Permute f' a' g' b'), env4)
 
-        Scanl f e a -> do
-          (f', env1, var1) <- travF f aenv []
-          (e', env2, var2) <- travE e env1 var1
-          (a', env3)       <- travA a env2
-          kernel           <- build "inclusive_scan" acc var2
-          return (ExecAcc singleRef kernel var2 (Scanl f' e' a'), env3)
+        -- Backpermute e f a -> do
+        --   (e', env1, _)    <- travE e aenv []
+        --   (f', env2, var2) <- travF f env1 []
+        --   (a', env3)       <- travA a env2
+        --   kernel           <- build "backpermute" acc var2
+        --   return (ExecAcc singleRef kernel var2 (Backpermute e' f' a'), env3)
 
-        Scanl' f e a -> do
-          (f', env1, var1) <- travF f aenv []
-          (e', env2, var2) <- travE e env1 var1
-          (a', env3)       <- travA a env2
-          kernel           <- build "inclusive_scan" acc var2
-          return (ExecAcc (R2 0 0) kernel var2 (Scanl' f' e' a'), env3)
+        -- FoldSeg f e a s -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (e', env2, var2) <- travE e env1 var1
+        --   (a', env3)       <- travA a env2
+        --   (s', env4)       <- travA (scan s) env3
+        --   kernel           <- build "foldSeg" acc var2
+        --   return (ExecAcc singleRef kernel var2 (FoldSeg f' e' a' s'), env4)
 
-        Scanl1 f a -> do
-          (f', env1, var1) <- travF f aenv []
-          (a', env2)       <- travA a env1
-          kernel           <- build "inclusive_scan" acc var1
-          return (ExecAcc singleRef kernel var1 (Scanl1 f' a'), env2)
+        -- Fold1Seg f a s -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (a', env2)       <- travA a env1
+        --   (s', env3)       <- travA (scan s) env2
+        --   kernel           <- build "foldSeg" acc var1
+        --   return (ExecAcc singleRef kernel var1 (Fold1Seg f' a' s'), env3)
 
-        Scanr f e a -> do
-          (f', env1, var1) <- travF f aenv []
-          (e', env2, var2) <- travE e env1 var1
-          (a', env3)       <- travA a env2
-          kernel           <- build "inclusive_scan" acc var2
-          return (ExecAcc singleRef kernel var2 (Scanr f' e' a'), env3)
+        -- Scanl f e a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (e', env2, var2) <- travE e env1 var1
+        --   (a', env3)       <- travA a env2
+        --   kernel           <- build "inclusive_scan" acc var2
+        --   return (ExecAcc singleRef kernel var2 (Scanl f' e' a'), env3)
 
-        Scanr' f e a -> do
-          (f', env1, var1) <- travF f aenv []
-          (e', env2, var2) <- travE e env1 var1
-          (a', env3)       <- travA a env2
-          kernel           <- build "inclusive_scan" acc var2
-          return (ExecAcc (R2 0 0) kernel var2 (Scanr' f' e' a'), env3)
+        -- Scanl' f e a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (e', env2, var2) <- travE e env1 var1
+        --   (a', env3)       <- travA a env2
+        --   kernel           <- build "inclusive_scan" acc var2
+        --   return (ExecAcc (R2 0 0) kernel var2 (Scanl' f' e' a'), env3)
 
-        Scanr1 f a -> do
-          (f', env1, var1) <- travF f aenv []
-          (a', env2)       <- travA a env1
-          kernel           <- build "inclusive_scan" acc var1
-          return (ExecAcc singleRef kernel var1 (Scanr1 f' a'), env2)
+        -- Scanl1 f a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (a', env2)       <- travA a env1
+        --   kernel           <- build "inclusive_scan" acc var1
+        --   return (ExecAcc singleRef kernel var1 (Scanl1 f' a'), env2)
 
-        Permute f a g b -> do
-          (f', env1, var1) <- travF f aenv []
-          (g', env2, var2) <- travF g env1 var1
-          (a', env3)       <- travA a env2
-          (b', env4)       <- travA b env3
-          kernel           <- build "permute" acc var2
-          return (ExecAcc singleRef kernel var2 (Permute f' a' g' b'), env4)
+        -- Scanr f e a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (e', env2, var2) <- travE e env1 var1
+        --   (a', env3)       <- travA a env2
+        --   kernel           <- build "inclusive_scan" acc var2
+        --   return (ExecAcc singleRef kernel var2 (Scanr f' e' a'), env3)
 
-        Backpermute e f a -> do
-          (e', env1, _)    <- travE e aenv []
-          (f', env2, var2) <- travF f env1 []
-          (a', env3)       <- travA a env2
-          kernel           <- build "backpermute" acc var2
-          return (ExecAcc singleRef kernel var2 (Backpermute e' f' a'), env3)
+        -- Scanr' f e a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (e', env2, var2) <- travE e env1 var1
+        --   (a', env3)       <- travA a env2
+        --   kernel           <- build "inclusive_scan" acc var2
+        --   return (ExecAcc (R2 0 0) kernel var2 (Scanr' f' e' a'), env3)
 
-        Stencil f b a -> do
-          (f', env1, var1) <- travF f aenv []
-          (a', env2)       <- travA a env1
-          kernel           <- build "stencil" acc var1
-          return (ExecAcc singleRef kernel var1 (Stencil f' b a'), env2)
+        -- Scanr1 f a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (a', env2)       <- travA a env1
+        --   kernel           <- build "inclusive_scan" acc var1
+        --   return (ExecAcc singleRef kernel var1 (Scanr1 f' a'), env2)
 
-        Stencil2 f b1 a1 b2 a2 -> do
-          (f', env1, var1) <- travF f aenv []
-          (a1', env2)      <- travA a1 env1
-          (a2', env3)      <- travA a2 env2
-          kernel           <- build "stencil2" acc var1
-          return (ExecAcc singleRef kernel var1 (Stencil2 f' b1 a1' b2 a2'), env3)
+        -- Stencil f b a -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (a', env2)       <- travA a env1
+        --   kernel           <- build "stencil" acc var1
+        --   return (ExecAcc singleRef kernel var1 (Stencil f' b a'), env2)
 
+        -- Stencil2 f b1 a1 b2 a2 -> do
+        --   (f', env1, var1) <- travF f aenv []
+        --   (a1', env2)      <- travA a1 env1
+        --   (a2', env3)      <- travA a2 env2
+        --   kernel           <- build "stencil2" acc var1
+        --   return (ExecAcc singleRef kernel var1 (Stencil2 f' b1 a1' b2 a2'), env3)
+
+    notSupported :: String -> a
+    notSupported op = INTERNAL_ERROR(error) "prepareAcc" ("Operation " ++ show op ++ " is not yet supported by the OpenCL backend")
+    -- notSupported op = error $ "Operation " ++ show op ++ " is not yet supported by the OpenCL backend\n" ++
+    --                           "for Accelerate. Please contribute via: http://github.com/HIPERFIT/accelerate-opencl"
 
     -- Traverse a scalar expression
     --
