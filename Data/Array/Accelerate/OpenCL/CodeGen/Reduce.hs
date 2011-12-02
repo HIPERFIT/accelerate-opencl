@@ -67,10 +67,7 @@ makeFold inclusive (ty, dimIn) identity apply = runCGM $ do
 mkFoldAllSkel :: Arguments -> Arguments -> (Arguments, [C.Param]) -> Bool -> CGM ()
 mkFoldAllSkel d_out d_inA (d_local, local_params) inclusive = do
   ps <- getParams
-
   mkHandleSeed d_out inclusive
-  
-  mkWarpReduce local_params d_local
   mkBlockReduce local_params d_local
 
   addDefinitions
@@ -138,7 +135,6 @@ mkFoldSkel dimIn d_out d_inA (d_local, local_params) inclusive = do
 
   mkHandleSeedFold d_out inclusive
   mkWarpReduce local_params d_local
-  mkBlockReduce local_params d_local
 
   addDefinitions
     [cunit|
@@ -147,8 +143,6 @@ mkFoldSkel dimIn d_out d_inA (d_local, local_params) inclusive = do
                            $params:ps,
                            $params:local_params) {
             int warpSize = 32;
-
-            //typename TyOut* s_data = partition($args:d_local, blockDim.x);
 
             const typename Ix num_elements = $id:(indexHead dimIn)(shInA);
             const typename Ix num_segments = $id:(size dimOut)(shOut);
@@ -164,10 +158,6 @@ mkFoldSkel dimIn d_out d_inA (d_local, local_params) inclusive = do
              */
             for (typename Ix seg = vector_id; seg < num_segments; seg += num_vectors)
             {
-
-//            printf("tid: %d, numseg: %d, numvec: %d, seg: %d, globsize: %d, locsize: %d\n",
-//                     thread_id, num_segments, num_vectors, seg, get_global_size(0), get_local_size(0));
-
 
                 const typename Ix    start = seg   * num_elements;
                 const typename Ix    end   = start + num_elements;
@@ -218,7 +208,6 @@ mkFoldSkel dimIn d_out d_inA (d_local, local_params) inclusive = do
             }
         }
     |]
-
 
 -- | Cooperatively reduce a single warp's segment of an array to a single value
 mkWarpReduce :: [C.Param] -> Arguments -> CGM ()
