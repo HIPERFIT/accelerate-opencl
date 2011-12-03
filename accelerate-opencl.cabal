@@ -14,7 +14,7 @@ Data-files:             clbits/accelerate_opencl_shape.h
                         clbits/reduce.cl
 
 Extra-source-files:     include/accelerate.h
-
+                        README.md
 
 Flag pcache
   Description:          Enable the persistent caching of the compiled OpenCL modules
